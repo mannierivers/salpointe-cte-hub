@@ -662,7 +662,7 @@ const App = () => {
     );
   }
 
-  function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted }) {
+  function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {} }) {
     const formRef = useRef(null);
     const draftKey = getDraftKey(title);
 
@@ -732,7 +732,7 @@ const App = () => {
           </div>
           
           <form ref={formRef} onSubmit={handleSubmit}>
-            <ContactSection initialData={children.props.initialData} />
+            <ContactSection initialData={initialData} />
             {children}
             
             <div className="mt-8 flex justify-end gap-3">
