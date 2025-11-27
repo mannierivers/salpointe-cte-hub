@@ -35,8 +35,11 @@ import {
   PieChart,
   Settings,
   RefreshCw,
-  ChevronLeft, // Added Chevron icons
-  ChevronRight
+  ChevronLeft,
+  ChevronRight,
+  Download, // Added Download for CSV
+  Search,   // Added Search for Queue
+  Ban       // Added Ban for Blackout Dates
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -106,6 +109,7 @@ const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [adminMode, setAdminMode] = useState(false);
   const [inventory, setInventory] = useState(DEFAULT_INVENTORY); 
+  const [blackouts, setBlackouts] = useState([]); // Global state for blackout dates
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -121,6 +125,7 @@ const App = () => {
   }, []);
 
   useEffect(() => {
+    // Fetch Inventory
     const fetchInventory = async () => {
         const docRef = doc(db, "settings", "inventory");
         const docSnap = await getDoc(docRef);
@@ -128,6 +133,15 @@ const App = () => {
         else { await setDoc(docRef, DEFAULT_INVENTORY); setInventory(DEFAULT_INVENTORY); }
     };
     fetchInventory();
+
+    // Fetch Blackouts
+    const q = query(collection(db, "blackout_dates"));
+    const unsubscribeBlackouts = onSnapshot(q, (snapshot) => {
+        const dates = snapshot.docs.map(doc => doc.id); // Doc ID is the YYYY-MM-DD string
+        setBlackouts(dates);
+    });
+    
+    return () => unsubscribeBlackouts();
   }, []);
 
   const handleLogin = async () => { try { await signInWithPopup(auth, googleProvider); } catch (error) { console.error("Login failed:", error); alert("Login failed."); } };
@@ -198,13 +212,14 @@ const App = () => {
           <>
             {currentView === 'home' && <Dashboard onViewChange={setCurrentView} currentUser={currentUser} />}
             
-            {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} inventory={inventory} />}
+            {/* Forms receive blackouts for validation */}
+            {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
             {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
             {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
             {currentView === Departments.CULINARY && <CulinaryForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
-            {currentView === Departments.PHOTO && <PhotoForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} inventory={inventory} />}
+            {currentView === Departments.PHOTO && <PhotoForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
             
-            {currentView === Departments.CALENDAR && <CalendarView />}
+            {currentView === Departments.CALENDAR && <CalendarView adminMode={adminMode} blackouts={blackouts} />}
             {currentView === Departments.QUEUE && <RequestQueueView adminMode={adminMode} setAdminMode={setAdminMode} ALLOWED_ADMINS={ALLOWED_ADMINS} />}
             {currentView === Departments.MY_REQUESTS && <MyRequestsView currentUser={currentUser} />}
             {currentView === Departments.ANALYTICS && adminMode && <AnalyticsView />}
@@ -212,6 +227,7 @@ const App = () => {
           </>
         )}
       </main>
+      
       <footer className="text-center text-slate-400 text-xs md:text-sm py-8 px-4">&copy; {new Date().getFullYear()} Salpointe Catholic High School CTE Department</footer>
     </div>
   );
@@ -230,6 +246,7 @@ const App = () => {
   }
 
   function Dashboard({ onViewChange, currentUser }) {
+    // ... (Same as previous)
     const [drafts, setDrafts] = useState({});
     useEffect(() => {
         const checkDrafts = () => {
@@ -300,7 +317,6 @@ const App = () => {
   }
 
   function AnalyticsView() {
-    // ... (same as before)
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, deptCounts: {}, topEquipment: [] });
 
@@ -343,6 +359,7 @@ const App = () => {
   }
 
   function MyRequestsView({ currentUser }) {
+    // ... (Existing Code)
     const [myRequests, setMyRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     useEffect(() => {
@@ -362,16 +379,15 @@ const App = () => {
     );
   }
 
-  // --- NEW: Calendar with Navigation ---
+  // --- NEW: Calendar with Blackout Dates ---
 
-  function CalendarView() {
-    const [displayDate, setDisplayDate] = useState(new Date()); // Use dynamic date
+  function CalendarView({ adminMode, blackouts }) {
+    const [displayDate, setDisplayDate] = useState(new Date()); 
     const [selectedDate, setSelectedDate] = useState(null);
     const [filter, setFilter] = useState('all');
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Handle month switching
     const nextMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() + 1)));
     const prevMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() - 1)));
 
@@ -382,7 +398,6 @@ const App = () => {
                   const data = doc.data();
                   let dateStr = data.eventDate || data.checkoutDate || data.pickupDate || data.deadline;
                   if (!dateStr) return null; 
-                  // Safe Date Parsing (YYYY-MM-DD)
                   const [y, m, d] = dateStr.split('-').map(Number);
                   const dateObj = new Date(y, m - 1, d);
                   return { id: doc.id, title: data.title || data.requestName || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data };
@@ -392,6 +407,24 @@ const App = () => {
       });
       return () => unsubscribe();
     }, []);
+
+    const handleDateClick = async (day) => {
+        const clickedDate = new Date(displayDate.getFullYear(), displayDate.getMonth(), day);
+        const dateStr = clickedDate.toISOString().split('T')[0];
+
+        // Admin Toggle Blackout
+        if (adminMode) {
+            if (blackouts.includes(dateStr)) {
+                if(window.confirm(`Re-open ${dateStr}?`)) await deleteDoc(doc(db, "blackout_dates", dateStr));
+            } else {
+                if(window.confirm(`Blackout ${dateStr}? Students will not be able to book this date.`)) await setDoc(doc(db, "blackout_dates", dateStr), { reason: "Closed" });
+            }
+            return;
+        }
+        
+        // Normal User Click
+        setSelectedDate(selectedDate === day ? null : day);
+    };
 
     const getDaysInMonth = (date) => {
       const year = date.getFullYear();
@@ -404,7 +437,6 @@ const App = () => {
     const { days, firstDay, monthName, year } = getDaysInMonth(displayDate);
     const daysArray = Array.from({ length: days }, (_, i) => i + 1);
     const empties = Array.from({ length: firstDay }, (_, i) => i);
-
     const getEventsForDay = (dayNum) => events.filter(e => e.date.getDate() === dayNum && e.date.getMonth() === displayDate.getMonth() && e.date.getFullYear() === displayDate.getFullYear() && (filter === 'all' || e.dept === filter));
     const getGoogleCalendarUrl = (event) => {
       const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE";
@@ -427,7 +459,6 @@ const App = () => {
 
     return (
       <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-        {/* Calendar Header */}
         <div className="bg-red-900 text-white p-4 md:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
              <div className="flex items-center gap-4 mb-1">
@@ -444,6 +475,7 @@ const App = () => {
           </div>
         </div>
         <div className="p-4 md:p-6">
+           {adminMode && <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded text-xs text-gray-500 flex items-center gap-2"><Ban size={14}/> Admin Mode: Click a date to toggle blackout status (close/open).</div>}
            <div className="overflow-x-auto pb-2">
             {loading ? <div className="text-center py-8 text-slate-400">Loading schedule...</div> : (
               <div className="min-w-[600px] md:min-w-0 grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">
@@ -451,20 +483,32 @@ const App = () => {
                 {empties.map(i => <div key={`empty-${i}`} className="bg-white min-h-[80px] md:min-h-[100px]" />)}
                 {daysArray.map(day => {
                   const dayEvents = getEventsForDay(day);
-                  // Check if date is today (must match current month/year too)
                   const isToday = day === new Date().getDate() && displayDate.getMonth() === new Date().getMonth() && displayDate.getFullYear() === new Date().getFullYear();
-                  
+                  const currentDateStr = new Date(year, displayDate.getMonth(), day).toISOString().split('T')[0];
+                  const isBlackout = blackouts.includes(currentDateStr);
+
                   return (
-                    <div key={day} className={`bg-white min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-100 relative group cursor-pointer transition-colors ${selectedDate === day ? 'bg-red-50' : 'hover:bg-slate-50'}`} onClick={() => setSelectedDate(selectedDate === day ? null : day)}>
+                    <div 
+                      key={day} 
+                      className={`min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-100 relative group cursor-pointer transition-colors 
+                        ${isBlackout ? 'bg-gray-100' : 'bg-white'} 
+                        ${selectedDate === day ? 'bg-red-50' : 'hover:bg-slate-50'}`
+                      } 
+                      onClick={() => handleDateClick(day)}
+                    >
                       <span className={`text-xs md:text-sm font-medium inline-block w-6 h-6 md:w-7 md:h-7 leading-6 md:leading-7 text-center rounded-full mb-1 ${isToday ? 'bg-red-900 text-white' : 'text-slate-700'}`}>{day}</span>
-                      <div className="space-y-1">{dayEvents.map(e => <div key={e.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${e.type === 'checkout' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}>{e.title}</div>)}</div>
+                      {isBlackout ? (
+                          <div className="flex justify-center mt-2"><Ban className="text-gray-300" size={20} /></div>
+                      ) : (
+                        <div className="space-y-1">{dayEvents.map(e => <div key={e.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${e.type === 'checkout' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}>{e.title}</div>)}</div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
           </div>
-          {selectedDate && (
+          {selectedDate && !blackouts.includes(new Date(year, displayDate.getMonth(), selectedDate).toISOString().split('T')[0]) && (
             <div className="mt-4 md:mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200 animate-fade-in">
               <h4 className="font-bold text-slate-800 mb-3">Events for {monthName} {selectedDate}</h4>
               {getEventsForDay(selectedDate).length === 0 ? <p className="text-slate-500 text-sm">No approved events.</p> : (
@@ -482,11 +526,14 @@ const App = () => {
     );
   }
 
+  // --- Real-Time Request Queue Component ---
+
   function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
     const [requests, setRequests] = useState([]);
     const [filter, setFilter] = useState('all');
     const [loading, setLoading] = useState(true);
-    const [selectedRequest, setSelectedRequest] = useState(null); 
+    const [selectedRequest, setSelectedRequest] = useState(null);
+    const [searchTerm, setSearchTerm] = useState(''); // Added Search State
     
     useEffect(() => {
       const q = query(collection(db, "requests"), orderBy("createdAt", "desc"));
@@ -512,11 +559,46 @@ const App = () => {
       }
     };
 
-    const filteredRequests = filter === 'all' ? requests : requests.filter(r => r.dept?.toLowerCase().includes(filter.toLowerCase()));
+    // CSV EXPORT FUNCTION
+    const downloadCSV = () => {
+      const headers = ["ID", "Department", "Title", "User", "Email", "Date Submitted", "Status", "Details"];
+      const rows = requests.map(row => [
+        row.displayId,
+        row.dept,
+        `"${row.title}"`, 
+        row.fullName,
+        row.email,
+        row.formattedDate,
+        row.status,
+        `"${(row.details || row.brief || row.description || '').replace(/"/g, '""')}"` 
+      ]);
+      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "cte_requests_export.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    // Filter Logic (Dept + Search)
+    const filteredRequests = requests.filter(r => {
+        const matchesDept = filter === 'all' ? true : r.dept?.toLowerCase().includes(filter.toLowerCase());
+        const searchLower = searchTerm.toLowerCase();
+        const matchesSearch = 
+            r.title?.toLowerCase().includes(searchLower) || 
+            r.fullName?.toLowerCase().includes(searchLower) || 
+            r.displayId?.toLowerCase().includes(searchLower) ||
+            r.email?.toLowerCase().includes(searchLower);
+        return matchesDept && matchesSearch;
+    });
+
     const getStatusColor = (status) => { switch(status) { case 'Approved': return 'bg-green-100 text-green-700'; case 'Denied': return 'bg-red-100 text-red-700'; case 'Completed': return 'bg-slate-100 text-slate-600'; default: return 'bg-yellow-100 text-yellow-700'; }};
 
     return (
       <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden relative">
+        {/* Modal code remains the same... omitting for brevity but assumed present */}
         {selectedRequest && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4 animate-fade-in">
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col">
@@ -546,9 +628,33 @@ const App = () => {
             </div>
           </div>
         )}
-        <div className="bg-indigo-900 text-white p-4 md:p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+
+        <div className="bg-indigo-900 text-white p-4 md:p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><ClipboardList className="text-indigo-300" /> All Requests</h2><p className="text-indigo-200 text-sm">Live Admin Queue</p></div>
-          <select className="bg-indigo-800 text-white border border-indigo-700 rounded-lg px-4 py-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">All Departments</option><option value="film">Film</option><option value="graphic">Graphic</option><option value="business">Business</option><option value="culinary">Culinary</option><option value="photo">Photo</option></select>
+          
+          <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+            {/* SEARCH BAR */}
+            <div className="relative flex-1 lg:w-64">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-indigo-300" size={16} />
+                <input 
+                    type="text" 
+                    placeholder="Search requests..." 
+                    className="w-full bg-indigo-800 text-white border border-indigo-700 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-indigo-400"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+
+            <div className="flex gap-2">
+                <select className="bg-indigo-800 text-white border border-indigo-700 rounded-lg px-4 py-2 text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">All Depts</option><option value="film">Film</option><option value="graphic">Graphic</option><option value="business">Business</option><option value="culinary">Culinary</option><option value="photo">Photo</option></select>
+                {/* EXPORT BUTTON */}
+                {adminMode && (
+                    <button onClick={downloadCSV} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors" title="Download CSV">
+                        <Download size={16} /> <span className="hidden sm:inline">Export</span>
+                    </button>
+                )}
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           {loading ? <div className="p-8 text-center text-slate-400">Loading...</div> : (
@@ -572,7 +678,7 @@ const App = () => {
     );
   }
 
-  function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser }) {
+  function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser, blackouts = [] }) { // Added blackouts prop
     const formRef = useRef(null);
     const draftKey = getDraftKey(title);
     const [showExitPrompt, setShowExitPrompt] = useState(false);
@@ -600,9 +706,26 @@ const App = () => {
 
     const handleSubmit = async (e) => {
       e.preventDefault();
+      
       const formData = new FormData(e.target);
       const data = {};
       for (const [key, value] of formData.entries()) { if (data[key]) { if (!Array.isArray(data[key])) data[key] = [data[key]]; data[key].push(value); } else { data[key] = value; } }
+      
+      // *** BLACKOUT VALIDATION ***
+      // Check any date fields against the blackouts array
+      const dateFields = ['checkoutDate', 'returnDate', 'eventDate', 'pickupDate', 'deadline'];
+      let conflictFound = false;
+      
+      dateFields.forEach(field => {
+          if (data[field] && blackouts.includes(data[field])) {
+              conflictFound = true;
+          }
+      });
+
+      if (conflictFound) {
+          alert("One of your selected dates is marked as a Blackout Date (Holiday/Closed). Please choose a different date.");
+          return; // Stop submission
+      }
       
       try {
         const timestampSuffix = Date.now().toString().slice(-4);
@@ -662,24 +785,21 @@ const App = () => {
 
   // --- Department Specific Forms ---
 
-  function FilmForm({ setSubmitted, onCancel, currentUser, inventory }) {
+  function FilmForm({ setSubmitted, onCancel, currentUser, inventory, blackouts }) { // Added blackouts
     const title = 'Film';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     const [requestType, setRequestType] = useState(initialData.requestType || 'checkout'); 
     
-    // Inventory Availability State
     const [availableStock, setAvailableStock] = useState({});
     const [datesSelected, setDatesSelected] = useState(false);
     const [dateRange, setDateRange] = useState({ start: initialData.checkoutDate || '', end: initialData.returnDate || '' });
 
-    // Handle date changes
     const handleDateChange = (e) => {
         const newDates = { ...dateRange, [e.target.name === 'checkoutDate' ? 'start' : 'end']: e.target.value };
         setDateRange(newDates);
     };
 
-    // Calculate Availability Effect
     useEffect(() => {
         const calculateAvailability = async () => {
             if (!dateRange.start || !dateRange.end || requestType !== 'checkout') {
@@ -707,13 +827,12 @@ const App = () => {
             setAvailableStock(stockStatus);
         };
         calculateAvailability();
-    }, [dateRange, requestType, inventory]); // Added inventory to dependency array
+    }, [dateRange, requestType, inventory]); 
 
-    // Single Day check
     const isSingleDay = dateRange.start && dateRange.end && dateRange.start === dateRange.end;
 
     return (
-      <FormContainer title={title} icon={Video} colorClass="bg-blue-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel} currentUser={currentUser}>
+      <FormContainer title={title} icon={Video} colorClass="bg-blue-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel} currentUser={currentUser} blackouts={blackouts}>
         <input type="hidden" name="requestType" value={requestType} />
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-700 mb-2">Request Type</label>
@@ -813,13 +932,12 @@ const App = () => {
     );
   }
 
-  function PhotoForm({ setSubmitted, onCancel, currentUser, inventory }) {
+  function PhotoForm({ setSubmitted, onCancel, currentUser, inventory, blackouts }) { // Added blackouts
     const title = 'Photo';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     const [requestType, setRequestType] = useState(initialData.requestType || 'service'); 
     
-    // Inventory Availability State for Photo
     const [availableStock, setAvailableStock] = useState({});
     const [datesSelected, setDatesSelected] = useState(false);
     const [dateRange, setDateRange] = useState({ start: initialData.pickupDate || '', end: initialData.returnDate || '' });
@@ -864,7 +982,7 @@ const App = () => {
             });
 
             const stockStatus = {};
-            Object.keys(inventory).forEach(item => { // Use dynamic inventory
+            Object.keys(inventory).forEach(item => { 
                 const total = inventory[item];
                 const used = usageCounts[item] || 0;
                 stockStatus[item] = Math.max(0, total - used);
@@ -874,13 +992,12 @@ const App = () => {
         };
 
         calculateAvailability();
-    }, [dateRange, requestType, inventory]); // Added inventory to dependencies
+    }, [dateRange, requestType, inventory]); 
 
-    // Single Day check for Photo
     const isSingleDay = dateRange.start && dateRange.end && dateRange.start === dateRange.end;
 
     return (
-      <FormContainer title={title} icon={Camera} colorClass="bg-pink-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel} currentUser={currentUser}>
+      <FormContainer title={title} icon={Camera} colorClass="bg-pink-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel} currentUser={currentUser} blackouts={blackouts}>
         <input type="hidden" name="requestType" value={requestType} />
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-700 mb-2">Request Type</label>
@@ -954,7 +1071,6 @@ const App = () => {
           </div>
         ) : (
           <div className="space-y-4 animate-fade-in">
-            {/* Event Name covered by Request Name */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input name="eventDate" defaultValue={initialData.eventDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label><input name="startTime" defaultValue={initialData.startTime} type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
