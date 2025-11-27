@@ -28,12 +28,15 @@ import {
   Hash,
   AlertCircle,
   AlertTriangle,
-  History, // Added History icon for My Requests
-  LogIn
+  History,
+  LogIn,
+  BarChart3, // Added for Analytics
+  TrendingUp,
+  PieChart
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where } from 'firebase/firestore'; 
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth'; // Added onAuthStateChanged
+import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import emailjs from '@emailjs/browser'; 
 
 import salpointeLogo from './SC-LOGO-RGB.png'; 
@@ -77,7 +80,8 @@ const Departments = {
   PHOTO: 'photo',
   CALENDAR: 'calendar',
   QUEUE: 'queue',
-  MY_REQUESTS: 'my_requests' // New View
+  MY_REQUESTS: 'my_requests',
+  ANALYTICS: 'analytics' // New View
 };
 
 const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
@@ -193,13 +197,22 @@ const App = () => {
                         <span className="hidden sm:inline">My Requests</span>
                     </button>
                     {adminMode && (
+                      <>
                         <button 
                             onClick={() => { setCurrentView(Departments.QUEUE); setSubmitted(false); }}
                             className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.QUEUE ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}
                         >
                             <ClipboardList size={16} />
-                            <span className="hidden sm:inline">Admin Queue</span>
+                            <span className="hidden sm:inline">Queue</span>
                         </button>
+                        <button 
+                            onClick={() => { setCurrentView(Departments.ANALYTICS); setSubmitted(false); }}
+                            className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.ANALYTICS ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}
+                        >
+                            <BarChart3 size={16} />
+                            <span className="hidden sm:inline">Stats</span>
+                        </button>
+                      </>
                     )}
                     <button 
                         onClick={handleLogout}
@@ -242,7 +255,7 @@ const App = () => {
             {currentView === Departments.QUEUE && (
                 <RequestQueueView 
                     adminMode={adminMode} 
-                    setAdminMode={setAdminMode} // Kept for consistency, though handled globally now
+                    setAdminMode={setAdminMode} 
                     ALLOWED_ADMINS={ALLOWED_ADMINS}
                 />
             )}
@@ -250,6 +263,11 @@ const App = () => {
             {/* Student "My Requests" View */}
             {currentView === Departments.MY_REQUESTS && (
                 <MyRequestsView currentUser={currentUser} />
+            )}
+
+            {/* Admin Analytics View */}
+            {currentView === Departments.ANALYTICS && adminMode && (
+                <AnalyticsView />
             )}
           </>
         )}
@@ -341,6 +359,175 @@ const App = () => {
             <p className="text-slate-500 text-sm leading-relaxed">{card.desc}</p>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  // --- NEW: Analytics Component ---
+
+  function AnalyticsView() {
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+      total: 0,
+      approved: 0,
+      pending: 0,
+      deptCounts: {},
+      topEquipment: []
+    });
+
+    useEffect(() => {
+      const q = query(collection(db, "requests"));
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        let total = 0;
+        let approved = 0;
+        let pending = 0;
+        const deptCounts = {};
+        const equipmentCounts = {};
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          total++;
+          
+          // Count status
+          if (data.status === 'Approved' || data.status === 'Completed') approved++;
+          if (data.status === 'Pending Review') pending++;
+
+          // Count departments
+          deptCounts[data.dept] = (deptCounts[data.dept] || 0) + 1;
+
+          // Count equipment
+          if (data.equipment) {
+            const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment];
+            items.forEach(item => {
+              equipmentCounts[item] = (equipmentCounts[item] || 0) + 1;
+            });
+          }
+        });
+
+        // Sort Equipment
+        const sortedEquipment = Object.entries(equipmentCounts)
+          .sort(([,a], [,b]) => b - a)
+          .slice(0, 5); // Top 5
+
+        setStats({
+          total,
+          approved,
+          pending,
+          deptCounts,
+          topEquipment: sortedEquipment
+        });
+        setLoading(false);
+      });
+
+      return () => unsubscribe();
+    }, []);
+
+    const approvalRate = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <TrendingUp className="text-emerald-600" /> CTE Insights
+              </h2>
+              <p className="text-slate-500 text-sm">Real-time usage metrics and trends.</p>
+            </div>
+            <div className="bg-slate-100 px-4 py-2 rounded-lg text-slate-600 font-mono text-sm">
+              Total Requests: <strong>{stats.total}</strong>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-12 text-slate-400">Crunching numbers...</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Key Metrics Cards */}
+              <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100">
+                <h4 className="text-emerald-800 font-bold text-sm uppercase tracking-wide mb-1">Approval Rate</h4>
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-bold text-emerald-600">{approvalRate}%</span>
+                  <span className="text-emerald-500 text-sm mb-1">of all requests</span>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
+                <h4 className="text-blue-800 font-bold text-sm uppercase tracking-wide mb-1">Completed / Approved</h4>
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-bold text-blue-600">{stats.approved}</span>
+                  <span className="text-blue-500 text-sm mb-1">projects greenlit</span>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                <h4 className="text-amber-800 font-bold text-sm uppercase tracking-wide mb-1">Pending Review</h4>
+                <div className="flex items-end gap-2">
+                  <span className="text-4xl font-bold text-amber-600">{stats.pending}</span>
+                  <span className="text-amber-500 text-sm mb-1">awaiting action</span>
+                </div>
+              </div>
+
+              {/* Department Breakdown */}
+              <div className="md:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <PieChart size={18} className="text-slate-400" /> Requests by Department
+                </h3>
+                <div className="space-y-4">
+                  {Object.entries(stats.deptCounts)
+                    .sort(([,a], [,b]) => b - a) // Sort descending
+                    .map(([dept, count]) => {
+                      const percentage = (count / stats.total) * 100;
+                      return (
+                        <div key={dept}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="font-medium text-slate-700">{dept}</span>
+                            <span className="text-slate-500">{count} requests</span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                            <div 
+                              className="bg-red-800 h-3 rounded-full transition-all duration-1000 ease-out" 
+                              style={{ width: `${percentage}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                  })}
+                  {Object.keys(stats.deptCounts).length === 0 && (
+                    <div className="text-center text-slate-400 py-4">No data yet.</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Top Equipment */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <Camera size={18} className="text-slate-400" /> Top Equipment
+                </h3>
+                {stats.topEquipment.length > 0 ? (
+                  <ul className="space-y-3">
+                    {stats.topEquipment.map(([item, count], index) => (
+                      <li key={item} className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-700 truncate">{item.replace(' *', '')}</p>
+                          <p className="text-xs text-slate-400">{count} checkouts</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-slate-400 text-sm text-center py-4">No checkouts recorded.</p>
+                )}
+              </div>
+
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -508,7 +695,7 @@ const App = () => {
     );
   }
 
-  // --- Calendar Component (Unchanged logic, just keeping structure) ---
+  // --- Calendar Component ---
   function CalendarView() {
     const today = new Date();
     const [selectedDate, setSelectedDate] = useState(null);
@@ -965,25 +1152,43 @@ const App = () => {
                 return;
             }
             setDatesSelected(true);
-            const q = query(collection(db, "requests"), where("dept", "==", "Photo"), where("requestType", "==", "checkout"));
+
+            const q = query(
+                collection(db, "requests"), 
+                where("dept", "==", "Photo"),
+                where("requestType", "==", "checkout") 
+            );
+            
             const querySnapshot = await getDocs(q);
             const usageCounts = {};
+
             querySnapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.status === 'Denied' || data.status === 'Completed') return;
+
                 const reqStart = data.pickupDate; 
                 const reqEnd = data.returnDate;
+                
                 if (reqStart <= dateRange.end && reqEnd >= dateRange.start) {
                     if (data.equipment) {
                         const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment];
-                        items.forEach(item => { usageCounts[item] = (usageCounts[item] || 0) + 1; });
+                        items.forEach(item => {
+                            usageCounts[item] = (usageCounts[item] || 0) + 1;
+                        });
                     }
                 }
             });
+
             const stockStatus = {};
-            Object.keys(INVENTORY_LIMITS).forEach(item => { stockStatus[item] = Math.max(0, INVENTORY_LIMITS[item] - (usageCounts[item] || 0)); });
+            Object.keys(INVENTORY_LIMITS).forEach(item => {
+                const total = INVENTORY_LIMITS[item];
+                const used = usageCounts[item] || 0;
+                stockStatus[item] = Math.max(0, total - used);
+            });
+            
             setAvailableStock(stockStatus);
         };
+
         calculateAvailability();
     }, [dateRange, requestType]);
 
@@ -1003,31 +1208,69 @@ const App = () => {
         {requestType === 'checkout' ? (
           <div className="space-y-4 animate-fade-in">
              <div className="bg-pink-50 p-4 rounded-md border border-pink-100 text-sm text-pink-800 mb-4"><strong>Requirement:</strong> Photo I completion required.</div>
+             
+             {/* Dates Moved Up */}
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                <div><label className="block text-sm font-medium text-slate-700 mb-1">Pickup Date</label><input name="pickupDate" defaultValue={initialData.pickupDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
                <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
              </div>
+
+             {/* Single Day Hours Selection for Photo */}
              {isSingleDay && (
                 <div className="mb-4 animate-fade-in bg-pink-50 p-4 rounded-lg border border-pink-100">
                     <label className="block text-sm font-bold text-pink-800 mb-1">Duration / Specific Hours</label>
                     <select name="durationHours" defaultValue={initialData.durationHours} className="w-full rounded-md border-pink-300 border p-2.5 text-sm bg-white"><option value="">Select Duration...</option><option value="1 Hour">1 Hour</option><option value="2 Hours">2 Hours</option><option value="Full Day (School Hours)">Full Day</option><option value="Overnight">Overnight</option></select>
                 </div>
              )}
+
              <label className="block text-sm font-medium text-slate-700">Select Equipment Needed:</label>
+             
              {!datesSelected ? (
-                 <div className="p-4 bg-slate-100 rounded text-center text-slate-500 text-sm"><AlertCircle className="inline-block mr-2 w-4 h-4 mb-1"/>Please select dates above to check equipment availability.</div>
+                 <div className="p-4 bg-slate-100 rounded text-center text-slate-500 text-sm">
+                     <AlertCircle className="inline-block mr-2 w-4 h-4 mb-1"/>
+                     Please select dates above to check equipment availability.
+                 </div>
              ) : (
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                    {['DSLR Camera Body', 'Zoom Lens (18-55mm)', 'Telephoto Lens (70-200mm)', 'Portrait Lens (50mm)', 'SD Card Reader', 'Tripod', 'Flash Unit'].map((item) => {
-                     const remaining = availableStock[item] !== undefined ? availableStock[item] : 99; const isSoldOut = remaining <= 0;
-                     return (<label key={item} className={`flex items-center space-x-3 p-3 border rounded-lg transition-colors ${isSoldOut ? 'bg-gray-100 opacity-60 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer active:bg-pink-50'}`}><input type="checkbox" name="equipment" value={item} disabled={isSoldOut} defaultChecked={initialData.equipment?.includes(item)} className="w-5 h-5 text-pink-600 rounded focus:ring-pink-500" /><div className="flex-1"><span className="text-slate-700 text-sm block">{item}</span><span className={`text-xs ${isSoldOut ? 'text-red-600 font-bold' : 'text-green-600'}`}>{isSoldOut ? 'Unavailable for dates' : `${remaining} available`}</span></div></label>);
+                     const remaining = availableStock[item] !== undefined ? availableStock[item] : 99; 
+                     const isSoldOut = remaining <= 0;
+                     
+                     return (
+                        <label key={item} className={`flex items-center space-x-3 p-3 border rounded-lg transition-colors ${isSoldOut ? 'bg-gray-100 opacity-60 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer active:bg-pink-50'}`}>
+                        <input 
+                            type="checkbox" 
+                            name="equipment" 
+                            value={item} 
+                            disabled={isSoldOut}
+                            defaultChecked={initialData.equipment?.includes(item)} 
+                            className="w-5 h-5 text-pink-600 rounded focus:ring-pink-500" 
+                        />
+                        <div className="flex-1">
+                            <span className="text-slate-700 text-sm block">{item}</span>
+                            <span className={`text-xs ${isSoldOut ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                                {isSoldOut ? 'Unavailable for dates' : `${remaining} available`}
+                            </span>
+                        </div>
+                        </label>
+                     );
                    })}
                  </div>
              )}
-             <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg"><label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" required className="mt-1 w-5 h-5 text-pink-600 rounded focus:ring-pink-500 border-gray-300" /><span className="text-sm text-slate-700 leading-tight"><strong>Terms & Conditions:</strong> I agree to pay for equipment in full at market value in the event of damage beyond repair, lost, or stolen equipment.</span></label></div>
+
+             {/* Terms & Conditions for Photo */}
+             <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" required className="mt-1 w-5 h-5 text-pink-600 rounded focus:ring-pink-500 border-gray-300" />
+                  <span className="text-sm text-slate-700 leading-tight">
+                    <strong>Terms & Conditions:</strong> I agree to pay for equipment in full at market value in the event of damage beyond repair, lost, or stolen equipment.
+                  </span>
+                </label>
+             </div>
           </div>
         ) : (
           <div className="space-y-4 animate-fade-in">
+            {/* Event Name covered by Request Name */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input name="eventDate" defaultValue={initialData.eventDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label><input name="startTime" defaultValue={initialData.startTime} type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
