@@ -60,6 +60,12 @@ const ALLOWED_ADMINS = [
     "jelias@salpointe.org",
     "cneff@salpointe.org",
     "vdunk@salpointe.org",
+    "amartin@salpointe.org",
+    "lsaulsby@salpointe.org",
+    "jharris@salpointe.org",
+    "cjones@salpointe.org",
+    "groche@salpointe.org",
+    "tespinosa@salpointe.org",
     "erivers@salpointe.org" 
 ];
 
