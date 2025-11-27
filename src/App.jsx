@@ -27,7 +27,7 @@ import {
   LogOut,
   Hash,
   AlertCircle,
-  AlertTriangle // Added AlertTriangle for modal
+  AlertTriangle 
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where } from 'firebase/firestore'; 
@@ -221,6 +221,32 @@ const App = () => {
   }
 
   function Dashboard({ onViewChange }) {
+    // State to track which departments have saved drafts
+    const [drafts, setDrafts] = useState({});
+
+    useEffect(() => {
+        const checkDrafts = () => {
+            const status = {};
+            // Map IDs to the titles used in FormContainer for draft keys
+            const map = {
+                [Departments.FILM]: 'Film',
+                [Departments.GRAPHIC]: 'Graphic',
+                [Departments.BUSINESS]: 'Business',
+                [Departments.CULINARY]: 'Culinary',
+                [Departments.PHOTO]: 'Photo'
+            };
+            
+            Object.keys(map).forEach(deptId => {
+                const key = getDraftKey(map[deptId]);
+                if (localStorage.getItem(key)) {
+                    status[deptId] = true;
+                }
+            });
+            setDrafts(status);
+        };
+        checkDrafts();
+    }, []);
+
     const cards = [
       { 
         id: Departments.FILM, 
@@ -270,8 +296,15 @@ const App = () => {
           <div 
             key={card.id}
             onClick={() => onViewChange(card.id)}
-            className="group bg-white rounded-xl shadow-sm hover:shadow-md border border-slate-200 p-5 md:p-6 cursor-pointer transition-all hover:-translate-y-1 flex flex-col h-full active:scale-95 md:active:scale-100"
+            className="group relative bg-white rounded-xl shadow-sm hover:shadow-md border border-slate-200 p-5 md:p-6 cursor-pointer transition-all hover:-translate-y-1 flex flex-col h-full active:scale-95 md:active:scale-100"
           >
+            {/* Draft Indicator Badge */}
+            {drafts[card.id] && (
+                <span className="absolute top-4 right-4 bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm z-10">
+                    <Save size={12} /> Resume Draft
+                </span>
+            )}
+
             <div className={`w-12 h-12 rounded-lg ${card.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
               <card.icon size={24} />
             </div>
