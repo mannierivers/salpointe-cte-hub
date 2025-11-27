@@ -30,12 +30,14 @@ import {
   AlertTriangle,
   History,
   LogIn,
-  BarChart3, // Added for Analytics
+  BarChart3,
   TrendingUp,
-  PieChart
+  PieChart,
+  Settings, // Added Settings icon for Inventory
+  RefreshCw
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
-import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where } from 'firebase/firestore'; 
+import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import emailjs from '@emailjs/browser'; 
 
@@ -56,8 +58,9 @@ const ALLOWED_ADMINS = [
     "erivers@salpointe.org" 
 ];
 
-// *** MASTER INVENTORY LIMITS ***
-const INVENTORY_LIMITS = {
+// *** DEFAULT FALLBACK INVENTORY ***
+// Used only if database is empty
+const DEFAULT_INVENTORY = {
   'Cinema Camera Kit *': 1,       
   'Gimbal / Stabilizer *': 6,
   'DJI Mic Kit (Wireless)': 4,
@@ -81,44 +84,33 @@ const Departments = {
   CALENDAR: 'calendar',
   QUEUE: 'queue',
   MY_REQUESTS: 'my_requests',
-  ANALYTICS: 'analytics' // New View
+  ANALYTICS: 'analytics',
+  INVENTORY: 'inventory' // New View
 };
 
 const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
 
-// Helper to send emails
 const sendNotificationEmail = (templateParams) => {
   if (EMAILJS_CONFIG.SERVICE_ID === "YOUR_SERVICE_ID_HERE") {
     console.warn("EmailJS not configured yet. Skipping email.");
     return;
   }
-
-  emailjs.send(
-    EMAILJS_CONFIG.SERVICE_ID,
-    EMAILJS_CONFIG.TEMPLATE_ID,
-    templateParams,
-    EMAILJS_CONFIG.PUBLIC_KEY
-  ).then((response) => {
-    console.log('EMAIL SUCCESS!', response.status, response.text);
-  }, (err) => {
-    console.log('EMAIL FAILED...', err);
-  });
+  emailjs.send(EMAILJS_CONFIG.SERVICE_ID, EMAILJS_CONFIG.TEMPLATE_ID, templateParams, EMAILJS_CONFIG.PUBLIC_KEY)
+    .then((response) => console.log('EMAIL SUCCESS!', response.status, response.text), (err) => console.log('EMAIL FAILED...', err));
 };
 
 const App = () => {
   const [currentView, setCurrentView] = useState('home');
   const [submitted, setSubmitted] = useState(false);
-  
-  // --- AUTH STATE ---
   const [currentUser, setCurrentUser] = useState(null);
   const [adminMode, setAdminMode] = useState(false);
+  const [inventory, setInventory] = useState(DEFAULT_INVENTORY); // State for inventory
 
   // Global Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
-        // Automatically check if they are an admin
         setAdminMode(ALLOWED_ADMINS.includes(user.email));
       } else {
         setCurrentUser(null);
@@ -128,7 +120,23 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // Global Login Handler
+  // Fetch Inventory on Load
+  useEffect(() => {
+    const fetchInventory = async () => {
+        const docRef = doc(db, "settings", "inventory");
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            setInventory(docSnap.data());
+        } else {
+            // Initialize if missing
+            await setDoc(docRef, DEFAULT_INVENTORY);
+            setInventory(DEFAULT_INVENTORY);
+        }
+    };
+    fetchInventory();
+  }, []);
+
   const handleLogin = async () => {
     try {
         await signInWithPopup(auth, googleProvider);
@@ -143,7 +151,6 @@ const App = () => {
     goHome();
   };
 
-  // Reset function to go back home
   const goHome = () => {
     setCurrentView('home');
     setSubmitted(false);
@@ -157,7 +164,6 @@ const App = () => {
       <header className="bg-red-900 text-white shadow-lg sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-3 md:py-4 flex flex-wrap items-center justify-between gap-y-3">
           <div className="flex items-center space-x-3 cursor-pointer group" onClick={goHome}>
-            {/* Logo */}
             <img src={salpointeLogo} alt="Salpointe Catholic Logo" className="w-9 h-9 md:w-10 md:h-10 object-contain group-hover:scale-105 transition-transform" />
             <div>
               <h1 className="text-lg md:text-xl font-bold tracking-wide leading-tight">Salpointe Catholic</h1>
@@ -165,68 +171,41 @@ const App = () => {
             </div>
           </div>
           
-          {/* Global Navigation */}
           <nav className="flex items-center gap-1 md:gap-2 ml-auto">
-            {/* Back Button for Forms */}
             {!isRequestView && currentView !== 'home' && (
-               <button 
-                onClick={goHome}
-                className="text-xs md:text-sm bg-red-800 hover:bg-red-700 text-white px-3 py-2 rounded-lg transition-colors flex items-center gap-2 mr-1"
-              >
-                <ArrowLeft size={16} />
-                <span className="hidden sm:inline">Back</span>
+               <button onClick={goHome} className="text-xs md:text-sm bg-red-800 hover:bg-red-700 text-white px-3 py-2 rounded-lg transition-colors flex items-center gap-2 mr-1">
+                <ArrowLeft size={16} /><span className="hidden sm:inline">Back</span>
               </button>
             )}
 
-            <button 
-              onClick={() => { setCurrentView(Departments.CALENDAR); setSubmitted(false); }}
-              className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.CALENDAR ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}
-            >
-              <Calendar size={16} />
-              <span className="hidden sm:inline">Schedule</span>
+            <button onClick={() => { setCurrentView(Departments.CALENDAR); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.CALENDAR ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}>
+              <Calendar size={16} /><span className="hidden sm:inline">Schedule</span>
             </button>
             
-            {/* User Logic */}
             {currentUser ? (
                 <>
-                    <button 
-                        onClick={() => { setCurrentView(Departments.MY_REQUESTS); setSubmitted(false); }}
-                        className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.MY_REQUESTS ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}
-                    >
-                        <History size={16} />
-                        <span className="hidden sm:inline">My Requests</span>
+                    <button onClick={() => { setCurrentView(Departments.MY_REQUESTS); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.MY_REQUESTS ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}>
+                        <History size={16} /><span className="hidden sm:inline">My Requests</span>
                     </button>
                     {adminMode && (
                       <>
-                        <button 
-                            onClick={() => { setCurrentView(Departments.QUEUE); setSubmitted(false); }}
-                            className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.QUEUE ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}
-                        >
-                            <ClipboardList size={16} />
-                            <span className="hidden sm:inline">Queue</span>
+                        <button onClick={() => { setCurrentView(Departments.QUEUE); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.QUEUE ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}>
+                            <ClipboardList size={16} /><span className="hidden sm:inline">Queue</span>
                         </button>
-                        <button 
-                            onClick={() => { setCurrentView(Departments.ANALYTICS); setSubmitted(false); }}
-                            className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.ANALYTICS ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}
-                        >
-                            <BarChart3 size={16} />
-                            <span className="hidden sm:inline">Stats</span>
+                        <button onClick={() => { setCurrentView(Departments.ANALYTICS); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.ANALYTICS ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}>
+                            <BarChart3 size={16} /><span className="hidden sm:inline">Stats</span>
+                        </button>
+                        <button onClick={() => { setCurrentView(Departments.INVENTORY); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${currentView === Departments.INVENTORY ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}>
+                            <Settings size={16} /><span className="hidden sm:inline">Stock</span>
                         </button>
                       </>
                     )}
-                    <button 
-                        onClick={handleLogout}
-                        className="ml-2 text-xs md:text-sm font-medium px-3 py-2 rounded-lg bg-red-950/50 hover:bg-red-950 text-red-200 hover:text-white transition-colors flex items-center gap-2"
-                        title={`Logged in as ${currentUser.email}`}
-                    >
+                    <button onClick={handleLogout} className="ml-2 text-xs md:text-sm font-medium px-3 py-2 rounded-lg bg-red-950/50 hover:bg-red-950 text-red-200 hover:text-white transition-colors flex items-center gap-2" title={`Logged in as ${currentUser.email}`}>
                         <LogOut size={16} />
                     </button>
                 </>
             ) : (
-                <button 
-                    onClick={handleLogin}
-                    className="ml-2 text-xs md:text-sm font-bold bg-white text-red-900 px-4 py-2 rounded-lg hover:bg-amber-50 transition-colors flex items-center gap-2 shadow-sm"
-                >
+                <button onClick={handleLogin} className="ml-2 text-xs md:text-sm font-bold bg-white text-red-900 px-4 py-2 rounded-lg hover:bg-amber-50 transition-colors flex items-center gap-2 shadow-sm">
                     <LogIn size={16} /> Login
                 </button>
             )}
@@ -242,41 +221,25 @@ const App = () => {
           <>
             {currentView === 'home' && <Dashboard onViewChange={setCurrentView} currentUser={currentUser} />}
             
-            {/* Forms now receive currentUser for auto-fill */}
-            {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
+            {/* Forms now use dynamic inventory state */}
+            {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} inventory={inventory} />}
             {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
             {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
             {currentView === Departments.CULINARY && <CulinaryForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
-            {currentView === Departments.PHOTO && <PhotoForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
+            {currentView === Departments.PHOTO && <PhotoForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} inventory={inventory} />}
             
             {currentView === Departments.CALENDAR && <CalendarView />}
+            {currentView === Departments.QUEUE && <RequestQueueView adminMode={adminMode} setAdminMode={setAdminMode} ALLOWED_ADMINS={ALLOWED_ADMINS} />}
+            {currentView === Departments.MY_REQUESTS && <MyRequestsView currentUser={currentUser} />}
+            {currentView === Departments.ANALYTICS && adminMode && <AnalyticsView />}
             
-            {/* Public Queue (or Admin Queue if admin) */}
-            {currentView === Departments.QUEUE && (
-                <RequestQueueView 
-                    adminMode={adminMode} 
-                    setAdminMode={setAdminMode} 
-                    ALLOWED_ADMINS={ALLOWED_ADMINS}
-                />
-            )}
-
-            {/* Student "My Requests" View */}
-            {currentView === Departments.MY_REQUESTS && (
-                <MyRequestsView currentUser={currentUser} />
-            )}
-
-            {/* Admin Analytics View */}
-            {currentView === Departments.ANALYTICS && adminMode && (
-                <AnalyticsView />
-            )}
+            {/* Inventory Manager */}
+            {currentView === Departments.INVENTORY && adminMode && <InventoryManager inventory={inventory} setInventory={setInventory} />}
           </>
         )}
       </main>
       
-      {/* Footer */}
-      <footer className="text-center text-slate-400 text-xs md:text-sm py-8 px-4">
-        &copy; {new Date().getFullYear()} Salpointe Catholic High School CTE Department
-      </footer>
+      <footer className="text-center text-slate-400 text-xs md:text-sm py-8 px-4">&copy; {new Date().getFullYear()} Salpointe Catholic High School CTE Department</footer>
     </div>
   );
 
@@ -285,40 +248,21 @@ const App = () => {
   function SuccessView({ onReset }) {
     return (
       <div className="max-w-lg mx-auto bg-white rounded-xl shadow-md p-6 md:p-8 text-center animate-fade-in-up mt-8 md:mt-16">
-        <div className="w-16 h-16 md:w-20 md:h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600">
-          <CheckCircle size={32} className="md:w-10 md:h-10" />
-        </div>
+        <div className="w-16 h-16 md:w-20 md:h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600"><CheckCircle size={32} className="md:w-10 md:h-10" /></div>
         <h2 className="text-xl md:text-2xl font-bold text-slate-800 mb-2">Request Received!</h2>
-        <p className="text-slate-600 mb-8 text-sm md:text-base">
-          Your request has been saved to the database and the department head has been notified.
-        </p>
-        <button 
-          onClick={onReset}
-          className="bg-red-900 text-white px-8 py-3 rounded-lg font-semibold hover:bg-red-800 transition-colors shadow-lg hover:shadow-xl w-full text-sm md:text-base"
-        >
-          Submit Another Request
-        </button>
+        <p className="text-slate-600 mb-8 text-sm md:text-base">Your request has been saved to the database and the department head has been notified.</p>
+        <button onClick={onReset} className="bg-red-900 text-white px-8 py-3 rounded-lg font-semibold hover:bg-red-800 transition-colors shadow-lg hover:shadow-xl w-full text-sm md:text-base">Submit Another Request</button>
       </div>
     );
   }
 
   function Dashboard({ onViewChange, currentUser }) {
     const [drafts, setDrafts] = useState({});
-
     useEffect(() => {
         const checkDrafts = () => {
             const status = {};
-            const map = {
-                [Departments.FILM]: 'Film',
-                [Departments.GRAPHIC]: 'Graphic',
-                [Departments.BUSINESS]: 'Business',
-                [Departments.CULINARY]: 'Culinary',
-                [Departments.PHOTO]: 'Photo'
-            };
-            Object.keys(map).forEach(deptId => {
-                const key = getDraftKey(map[deptId]);
-                if (localStorage.getItem(key)) status[deptId] = true;
-            });
+            const map = { [Departments.FILM]: 'Film', [Departments.GRAPHIC]: 'Graphic', [Departments.BUSINESS]: 'Business', [Departments.CULINARY]: 'Culinary', [Departments.PHOTO]: 'Photo' };
+            Object.keys(map).forEach(deptId => { const key = getDraftKey(map[deptId]); if (localStorage.getItem(key)) status[deptId] = true; });
             setDrafts(status);
         };
         checkDrafts();
@@ -335,258 +279,99 @@ const App = () => {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         <div className="col-span-full mb-2 md:mb-4">
-          <h2 className="text-2xl md:text-3xl font-bold text-slate-800">
-            {currentUser ? `Welcome, ${currentUser.displayName.split(' ')[0]}.` : "Welcome, Lancer."}
-          </h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-slate-800">{currentUser ? `Welcome, ${currentUser.displayName.split(' ')[0]}.` : "Welcome, Lancer."}</h2>
           <p className="text-slate-600 text-sm md:text-base">Select a department below to start your request.</p>
         </div>
-        
         {cards.map((card) => (
-          <div 
-            key={card.id}
-            onClick={() => onViewChange(card.id)}
-            className="group relative bg-white rounded-xl shadow-sm hover:shadow-md border border-slate-200 p-5 md:p-6 cursor-pointer transition-all hover:-translate-y-1 flex flex-col h-full active:scale-95 md:active:scale-100"
-          >
-            {drafts[card.id] && (
-                <span className="absolute top-4 right-4 bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm z-10">
-                    <Save size={12} /> Resume Draft
-                </span>
-            )}
-            <div className={`w-12 h-12 rounded-lg ${card.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-              <card.icon size={24} />
-            </div>
-            <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-2">{card.title}</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">{card.desc}</p>
+          <div key={card.id} onClick={() => onViewChange(card.id)} className="group relative bg-white rounded-xl shadow-sm hover:shadow-md border border-slate-200 p-5 md:p-6 cursor-pointer transition-all hover:-translate-y-1 flex flex-col h-full active:scale-95 md:active:scale-100">
+            {drafts[card.id] && (<span className="absolute top-4 right-4 bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm z-10"><Save size={12} /> Resume Draft</span>)}
+            <div className={`w-12 h-12 rounded-lg ${card.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}><card.icon size={24} /></div>
+            <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-2">{card.title}</h3><p className="text-slate-500 text-sm leading-relaxed">{card.desc}</p>
           </div>
         ))}
       </div>
     );
   }
 
-  // --- NEW: Analytics Component ---
-
-  function AnalyticsView() {
-    const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({
-      total: 0,
-      approved: 0,
-      pending: 0,
-      deptCounts: {},
-      topEquipment: []
-    });
-
-    useEffect(() => {
-      const q = query(collection(db, "requests"));
-      
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        let total = 0;
-        let approved = 0;
-        let pending = 0;
-        const deptCounts = {};
-        const equipmentCounts = {};
-
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          total++;
-          
-          // Count status
-          if (data.status === 'Approved' || data.status === 'Completed') approved++;
-          if (data.status === 'Pending Review') pending++;
-
-          // Count departments
-          deptCounts[data.dept] = (deptCounts[data.dept] || 0) + 1;
-
-          // Count equipment
-          if (data.equipment) {
-            const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment];
-            items.forEach(item => {
-              equipmentCounts[item] = (equipmentCounts[item] || 0) + 1;
-            });
-          }
-        });
-
-        // Sort Equipment
-        const sortedEquipment = Object.entries(equipmentCounts)
-          .sort(([,a], [,b]) => b - a)
-          .slice(0, 5); // Top 5
-
-        setStats({
-          total,
-          approved,
-          pending,
-          deptCounts,
-          topEquipment: sortedEquipment
-        });
-        setLoading(false);
-      });
-
-      return () => unsubscribe();
-    }, []);
-
-    const approvalRate = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
-
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                <TrendingUp className="text-emerald-600" /> CTE Insights
-              </h2>
-              <p className="text-slate-500 text-sm">Real-time usage metrics and trends.</p>
-            </div>
-            <div className="bg-slate-100 px-4 py-2 rounded-lg text-slate-600 font-mono text-sm">
-              Total Requests: <strong>{stats.total}</strong>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="text-center py-12 text-slate-400">Crunching numbers...</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
-              {/* Key Metrics Cards */}
-              <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100">
-                <h4 className="text-emerald-800 font-bold text-sm uppercase tracking-wide mb-1">Approval Rate</h4>
-                <div className="flex items-end gap-2">
-                  <span className="text-4xl font-bold text-emerald-600">{approvalRate}%</span>
-                  <span className="text-emerald-500 text-sm mb-1">of all requests</span>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
-                <h4 className="text-blue-800 font-bold text-sm uppercase tracking-wide mb-1">Completed / Approved</h4>
-                <div className="flex items-end gap-2">
-                  <span className="text-4xl font-bold text-blue-600">{stats.approved}</span>
-                  <span className="text-blue-500 text-sm mb-1">projects greenlit</span>
-                </div>
-              </div>
-
-              <div className="bg-amber-50 rounded-xl p-5 border border-amber-100">
-                <h4 className="text-amber-800 font-bold text-sm uppercase tracking-wide mb-1">Pending Review</h4>
-                <div className="flex items-end gap-2">
-                  <span className="text-4xl font-bold text-amber-600">{stats.pending}</span>
-                  <span className="text-amber-500 text-sm mb-1">awaiting action</span>
-                </div>
-              </div>
-
-              {/* Department Breakdown */}
-              <div className="md:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <PieChart size={18} className="text-slate-400" /> Requests by Department
-                </h3>
-                <div className="space-y-4">
-                  {Object.entries(stats.deptCounts)
-                    .sort(([,a], [,b]) => b - a) // Sort descending
-                    .map(([dept, count]) => {
-                      const percentage = (count / stats.total) * 100;
-                      return (
-                        <div key={dept}>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span className="font-medium text-slate-700">{dept}</span>
-                            <span className="text-slate-500">{count} requests</span>
-                          </div>
-                          <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
-                            <div 
-                              className="bg-red-800 h-3 rounded-full transition-all duration-1000 ease-out" 
-                              style={{ width: `${percentage}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      );
-                  })}
-                  {Object.keys(stats.deptCounts).length === 0 && (
-                    <div className="text-center text-slate-400 py-4">No data yet.</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Top Equipment */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <Camera size={18} className="text-slate-400" /> Top Equipment
-                </h3>
-                {stats.topEquipment.length > 0 ? (
-                  <ul className="space-y-3">
-                    {stats.topEquipment.map(([item, count], index) => (
-                      <li key={item} className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold">
-                          {index + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-700 truncate">{item.replace(' *', '')}</p>
-                          <p className="text-xs text-slate-400">{count} checkouts</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-slate-400 text-sm text-center py-4">No checkouts recorded.</p>
-                )}
-              </div>
-
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // --- Shared Form Components ---
-
   function ContactSection({ initialData = {}, currentUser }) {
-    // If user is logged in, prioritize their auth data for defaults
     const defaultName = currentUser?.displayName || initialData.fullName || '';
     const defaultEmail = currentUser?.email || initialData.email || '';
-
     return (
       <div className="bg-slate-50 p-5 md:p-6 rounded-lg border border-slate-200 mb-6">
-        <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-          <User size={18} /> Contact Information
-        </h3>
+        <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2"><User size={18} /> Contact Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-slate-600 mb-1">Project / Request Name</label>
-            <input name="requestName" type="text" defaultValue={initialData.requestName || ''} className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm" placeholder="e.g. Football Video, Catering for NHS" required />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Full Name</label>
-            <input 
-                name="fullName" 
-                type="text" 
-                defaultValue={defaultName}
-                readOnly={!!currentUser} // Lock field if logged in to prevent spoofing
-                className={`w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm ${currentUser ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
-                placeholder="Jane Doe" 
-                required 
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Salpointe Email</label>
-            <input 
-                name="email" 
-                type="email" 
-                defaultValue={defaultEmail}
-                readOnly={!!currentUser} // Lock field if logged in
-                className={`w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm ${currentUser ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
-                placeholder="jdoe@salpointe.org" 
-                required 
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-slate-600 mb-1">Role</label>
-            <select name="role" defaultValue={initialData.role || 'Student'} className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm bg-white">
-              <option>Student</option>
-              <option>Faculty / Staff</option>
-              <option>Club Representative</option>
-            </select>
-          </div>
+          <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1">Project / Request Name</label><input name="requestName" type="text" defaultValue={initialData.requestName || ''} className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm" placeholder="e.g. Football Video, Catering for NHS" required /></div>
+          <div><label className="block text-sm font-medium text-slate-600 mb-1">Full Name</label><input name="fullName" type="text" defaultValue={defaultName} readOnly={!!currentUser} className={`w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm ${currentUser ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} placeholder="Jane Doe" required /></div>
+          <div><label className="block text-sm font-medium text-slate-600 mb-1">Salpointe Email</label><input name="email" type="email" defaultValue={defaultEmail} readOnly={!!currentUser} className={`w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm ${currentUser ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} placeholder="jdoe@salpointe.org" required /></div>
+          <div className="md:col-span-2"><label className="block text-sm font-medium text-slate-600 mb-1">Role</label><select name="role" defaultValue={initialData.role || 'Student'} className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm bg-white"><option>Student</option><option>Faculty / Staff</option><option>Club Representative</option></select></div>
         </div>
       </div>
     );
   }
 
-  // --- NEW: My Requests Component ---
+  // --- NEW: Inventory Manager ---
+  function InventoryManager({ inventory, setInventory }) {
+    const [localInventory, setLocalInventory] = useState(inventory);
+    const [saving, setSaving] = useState(false);
+
+    const handleChange = (item, value) => {
+        setLocalInventory(prev => ({
+            ...prev,
+            [item]: parseInt(value) || 0
+        }));
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await setDoc(doc(db, "settings", "inventory"), localInventory);
+            setInventory(localInventory); // Update global state
+            alert("Inventory updated successfully!");
+        } catch (error) {
+            console.error("Error saving inventory:", error);
+            alert("Failed to save inventory.");
+        }
+        setSaving(false);
+    };
+
+    return (
+        <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+            <div className="bg-slate-800 text-white p-6 flex justify-between items-center">
+                <div>
+                    <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+                        <Settings className="text-amber-400" /> Inventory Manager
+                    </h2>
+                    <p className="text-slate-400 text-sm">Update Total Equipment Counts</p>
+                </div>
+                <button 
+                    onClick={handleSave} 
+                    disabled={saving}
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50"
+                >
+                    {saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} 
+                    {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+            </div>
+            
+            <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Object.entries(localInventory).map(([item, count]) => (
+                        <div key={item} className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex justify-between items-center">
+                            <span className="font-medium text-slate-700 text-sm">{item.replace('*','')}</span>
+                            <input 
+                                type="number" 
+                                min="0" 
+                                value={count} 
+                                onChange={(e) => handleChange(item, e.target.value)}
+                                className="w-20 p-2 border border-slate-300 rounded text-center font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+  }
 
   function MyRequestsView({ currentUser }) {
     const [myRequests, setMyRequests] = useState([]);
@@ -594,100 +379,28 @@ const App = () => {
 
     useEffect(() => {
         if (!currentUser) return;
-
-        // Query requests where 'email' matches the logged-in user
-        const q = query(
-            collection(db, "requests"), 
-            where("email", "==", currentUser.email),
-            orderBy("createdAt", "desc")
-        );
-
+        const q = query(collection(db, "requests"), where("email", "==", currentUser.email), orderBy("createdAt", "desc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const reqs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A'
-            }));
+            const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A' }));
             setMyRequests(reqs);
             setLoading(false);
         });
-
         return () => unsubscribe();
     }, [currentUser]);
 
-    const handleCancel = async (id) => {
-        if (window.confirm("Are you sure you want to cancel this request? This action cannot be undone.")) {
-            await deleteDoc(doc(db, "requests", id));
-        }
-    };
-
-    const getStatusColor = (status) => {
-        switch(status) {
-          case 'Approved': return 'bg-green-100 text-green-700';
-          case 'Denied': return 'bg-red-100 text-red-700';
-          case 'Completed': return 'bg-slate-100 text-slate-600';
-          default: return 'bg-yellow-100 text-yellow-700'; 
-        }
-    };
+    const handleCancel = async (id) => { if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "requests", id)); };
+    const getStatusColor = (status) => { switch(status) { case 'Approved': return 'bg-green-100 text-green-700'; case 'Denied': return 'bg-red-100 text-red-700'; case 'Completed': return 'bg-slate-100 text-slate-600'; default: return 'bg-yellow-100 text-yellow-700'; }};
 
     return (
         <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-            <div className="bg-red-900 text-white p-6">
-                <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2">
-                    <History className="text-amber-400" /> My Request History
-                </h2>
-                <p className="text-red-200 text-sm">Track your past and current requests.</p>
-            </div>
-
+            <div className="bg-red-900 text-white p-6"><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><History className="text-amber-400" /> My Request History</h2></div>
             <div className="overflow-x-auto">
-                {loading ? (
-                    <div className="p-8 text-center text-slate-400">Loading your history...</div>
-                ) : myRequests.length === 0 ? (
-                    <div className="p-12 text-center">
-                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-                            <ClipboardList size={32} />
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-700">No Requests Found</h3>
-                        <p className="text-slate-500 text-sm">You haven't submitted any requests yet.</p>
-                    </div>
-                ) : (
+                {loading ? <div className="p-8 text-center text-slate-400">Loading...</div> : myRequests.length === 0 ? <div className="p-12 text-center text-slate-500">No requests found.</div> : (
                     <table className="w-full text-left border-collapse min-w-[700px]">
-                        <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-semibold">
-                                <th className="p-4">ID</th>
-                                <th className="p-4">Department</th>
-                                <th className="p-4">Request Name</th>
-                                <th className="p-4">Date</th>
-                                <th className="p-4">Status</th>
-                                <th className="p-4">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {myRequests.map((req) => (
-                                <tr key={req.id} className="hover:bg-slate-50">
-                                    <td className="p-4 text-slate-400 font-mono text-xs">{req.displayId || '...'}</td>
-                                    <td className="p-4 text-slate-700 font-medium text-sm capitalize">{req.dept}</td>
-                                    <td className="p-4 text-slate-800 font-semibold text-sm">{req.title}</td>
-                                    <td className="p-4 text-slate-500 text-sm">{req.formattedDate}</td>
-                                    <td className="p-4">
-                                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide whitespace-nowrap ${getStatusColor(req.status)}`}>
-                                            {req.status}
-                                        </span>
-                                    </td>
-                                    <td className="p-4">
-                                        {/* Only allow cancelling if still pending */}
-                                        {req.status === 'Pending Review' && (
-                                            <button 
-                                                onClick={() => handleCancel(req.id)}
-                                                className="text-xs text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1 rounded border border-red-200 transition-colors"
-                                            >
-                                                Cancel Request
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
+                        <thead><tr className="bg-slate-50 border-b text-xs uppercase text-slate-500"><th className="p-4">ID</th><th className="p-4">Dept</th><th className="p-4">Request</th><th className="p-4">Date</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
+                        <tbody className="divide-y divide-slate-100">{myRequests.map((req) => (
+                            <tr key={req.id} className="hover:bg-slate-50"><td className="p-4 text-slate-400 font-mono text-xs">{req.displayId}</td><td className="p-4 capitalize text-sm">{req.dept}</td><td className="p-4 font-semibold text-sm">{req.title}</td><td className="p-4 text-sm">{req.formattedDate}</td><td className="p-4"><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${getStatusColor(req.status)}`}>{req.status}</span></td><td className="p-4">{req.status === 'Pending Review' && <button onClick={() => handleCancel(req.id)} className="text-xs text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-50">Cancel</button>}</td></tr>
+                        ))}</tbody>
                     </table>
                 )}
             </div>
@@ -695,8 +408,8 @@ const App = () => {
     );
   }
 
-  // --- Calendar Component ---
   function CalendarView() {
+    // ... existing Calendar code (unchanged) ...
     const today = new Date();
     const [selectedDate, setSelectedDate] = useState(null);
     const [filter, setFilter] = useState('all');
@@ -712,7 +425,7 @@ const App = () => {
                   if (!dateStr) return null; 
                   const [y, m, d] = dateStr.split('-').map(Number);
                   const dateObj = new Date(y, m - 1, d);
-                  return { id: doc.id, title: data.title || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data };
+                  return { id: doc.id, title: data.title || data.requestName || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data };
               }).filter(e => e !== null && e.status === 'Approved'); 
           setEvents(fetchedEvents);
           setLoading(false);
@@ -796,7 +509,47 @@ const App = () => {
     );
   }
 
-  // --- Real-Time Request Queue Component ---
+  function AnalyticsView() {
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, deptCounts: {}, topEquipment: [] });
+
+    useEffect(() => {
+      const q = query(collection(db, "requests"));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        let total = 0, approved = 0, pending = 0, deptCounts = {}, equipmentCounts = {};
+        snapshot.forEach(doc => {
+          const data = doc.data(); total++;
+          if (data.status === 'Approved' || data.status === 'Completed') approved++;
+          if (data.status === 'Pending Review') pending++;
+          deptCounts[data.dept] = (deptCounts[data.dept] || 0) + 1;
+          if (data.equipment) { const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment]; items.forEach(item => { equipmentCounts[item] = (equipmentCounts[item] || 0) + 1; }); }
+        });
+        const sortedEquipment = Object.entries(equipmentCounts).sort(([,a], [,b]) => b - a).slice(0, 5);
+        setStats({ total, approved, pending, deptCounts, topEquipment: sortedEquipment });
+        setLoading(false);
+      });
+      return () => unsubscribe();
+    }, []);
+
+    const approvalRate = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-6"><div><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><TrendingUp className="text-emerald-600" /> CTE Insights</h2><p className="text-slate-500 text-sm">Real-time usage metrics and trends.</p></div><div className="bg-slate-100 px-4 py-2 rounded-lg text-slate-600 font-mono text-sm">Total Requests: <strong>{stats.total}</strong></div></div>
+          {loading ? <div className="text-center py-12 text-slate-400">Crunching numbers...</div> : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100"><h4 className="text-emerald-800 font-bold text-sm uppercase tracking-wide mb-1">Approval Rate</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-emerald-600">{approvalRate}%</span><span className="text-emerald-500 text-sm mb-1">of all requests</span></div></div>
+              <div className="bg-blue-50 rounded-xl p-5 border border-blue-100"><h4 className="text-blue-800 font-bold text-sm uppercase tracking-wide mb-1">Completed / Approved</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-blue-600">{stats.approved}</span><span className="text-blue-500 text-sm mb-1">projects greenlit</span></div></div>
+              <div className="bg-amber-50 rounded-xl p-5 border border-amber-100"><h4 className="text-amber-800 font-bold text-sm uppercase tracking-wide mb-1">Pending Review</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-amber-600">{stats.pending}</span><span className="text-amber-500 text-sm mb-1">awaiting action</span></div></div>
+              <div className="md:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-sm"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PieChart size={18} className="text-slate-400" /> Requests by Department</h3><div className="space-y-4">{Object.entries(stats.deptCounts).sort(([,a], [,b]) => b - a).map(([dept, count]) => { const percentage = (count / stats.total) * 100; return (<div key={dept}><div className="flex justify-between text-sm mb-1"><span className="font-medium text-slate-700">{dept}</span><span className="text-slate-500">{count} requests</span></div><div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden"><div className="bg-red-800 h-3 rounded-full" style={{ width: `${percentage}%` }}></div></div></div>); })}</div></div>
+              <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Camera size={18} className="text-slate-400" /> Top Equipment</h3><ul className="space-y-3">{stats.topEquipment.map(([item, count], index) => (<li key={item} className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold">{index + 1}</div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-700 truncate">{item.replace(' *', '')}</p><p className="text-xs text-slate-400">{count} checkouts</p></div></li>))}</ul></div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
     const [requests, setRequests] = useState([]);
@@ -978,7 +731,7 @@ const App = () => {
 
   // --- Department Specific Forms ---
 
-  function FilmForm({ setSubmitted, onCancel, currentUser }) {
+  function FilmForm({ setSubmitted, onCancel, currentUser, inventory }) {
     const title = 'Film';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
@@ -1019,11 +772,11 @@ const App = () => {
                 }
             });
             const stockStatus = {};
-            Object.keys(INVENTORY_LIMITS).forEach(item => { stockStatus[item] = Math.max(0, INVENTORY_LIMITS[item] - (usageCounts[item] || 0)); });
+            Object.keys(inventory).forEach(item => { stockStatus[item] = Math.max(0, inventory[item] - (usageCounts[item] || 0)); });
             setAvailableStock(stockStatus);
         };
         calculateAvailability();
-    }, [dateRange, requestType]);
+    }, [dateRange, requestType, inventory]); // Added inventory to dependency array
 
     // Single Day check
     const isSingleDay = dateRange.start && dateRange.end && dateRange.start === dateRange.end;
@@ -1129,7 +882,7 @@ const App = () => {
     );
   }
 
-  function PhotoForm({ setSubmitted, onCancel, currentUser }) {
+  function PhotoForm({ setSubmitted, onCancel, currentUser, inventory }) {
     const title = 'Photo';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
@@ -1180,8 +933,8 @@ const App = () => {
             });
 
             const stockStatus = {};
-            Object.keys(INVENTORY_LIMITS).forEach(item => {
-                const total = INVENTORY_LIMITS[item];
+            Object.keys(inventory).forEach(item => { // Use dynamic inventory
+                const total = inventory[item];
                 const used = usageCounts[item] || 0;
                 stockStatus[item] = Math.max(0, total - used);
             });
@@ -1190,7 +943,7 @@ const App = () => {
         };
 
         calculateAvailability();
-    }, [dateRange, requestType]);
+    }, [dateRange, requestType, inventory]); // Added inventory to dependencies
 
     // Single Day check for Photo
     const isSingleDay = dateRange.start && dateRange.end && dateRange.start === dateRange.end;
