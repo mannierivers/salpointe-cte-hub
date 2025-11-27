@@ -33,8 +33,10 @@ import {
   BarChart3,
   TrendingUp,
   PieChart,
-  Settings, // Added Settings icon for Inventory
-  RefreshCw
+  Settings,
+  RefreshCw,
+  ChevronLeft, // Added Chevron icons
+  ChevronRight
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -59,7 +61,6 @@ const ALLOWED_ADMINS = [
 ];
 
 // *** DEFAULT FALLBACK INVENTORY ***
-// Used only if database is empty
 const DEFAULT_INVENTORY = {
   'Cinema Camera Kit *': 1,       
   'Gimbal / Stabilizer *': 6,
@@ -85,7 +86,7 @@ const Departments = {
   QUEUE: 'queue',
   MY_REQUESTS: 'my_requests',
   ANALYTICS: 'analytics',
-  INVENTORY: 'inventory' // New View
+  INVENTORY: 'inventory'
 };
 
 const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
@@ -104,9 +105,8 @@ const App = () => {
   const [submitted, setSubmitted] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [adminMode, setAdminMode] = useState(false);
-  const [inventory, setInventory] = useState(DEFAULT_INVENTORY); // State for inventory
+  const [inventory, setInventory] = useState(DEFAULT_INVENTORY); 
 
-  // Global Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -120,42 +120,19 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // Fetch Inventory on Load
   useEffect(() => {
     const fetchInventory = async () => {
         const docRef = doc(db, "settings", "inventory");
         const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-            setInventory(docSnap.data());
-        } else {
-            // Initialize if missing
-            await setDoc(docRef, DEFAULT_INVENTORY);
-            setInventory(DEFAULT_INVENTORY);
-        }
+        if (docSnap.exists()) setInventory(docSnap.data());
+        else { await setDoc(docRef, DEFAULT_INVENTORY); setInventory(DEFAULT_INVENTORY); }
     };
     fetchInventory();
   }, []);
 
-  const handleLogin = async () => {
-    try {
-        await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-        console.error("Login failed:", error);
-        alert("Login failed. Please try again.");
-    }
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    goHome();
-  };
-
-  const goHome = () => {
-    setCurrentView('home');
-    setSubmitted(false);
-  };
-
+  const handleLogin = async () => { try { await signInWithPopup(auth, googleProvider); } catch (error) { console.error("Login failed:", error); alert("Login failed."); } };
+  const handleLogout = async () => { await signOut(auth); goHome(); };
+  const goHome = () => { setCurrentView('home'); setSubmitted(false); };
   const isRequestView = ['home', Departments.FILM, Departments.GRAPHIC, Departments.BUSINESS, Departments.CULINARY, Departments.PHOTO].includes(currentView);
 
   return (
@@ -221,7 +198,6 @@ const App = () => {
           <>
             {currentView === 'home' && <Dashboard onViewChange={setCurrentView} currentUser={currentUser} />}
             
-            {/* Forms now use dynamic inventory state */}
             {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} inventory={inventory} />}
             {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
             {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
@@ -232,13 +208,10 @@ const App = () => {
             {currentView === Departments.QUEUE && <RequestQueueView adminMode={adminMode} setAdminMode={setAdminMode} ALLOWED_ADMINS={ALLOWED_ADMINS} />}
             {currentView === Departments.MY_REQUESTS && <MyRequestsView currentUser={currentUser} />}
             {currentView === Departments.ANALYTICS && adminMode && <AnalyticsView />}
-            
-            {/* Inventory Manager */}
             {currentView === Departments.INVENTORY && adminMode && <InventoryManager inventory={inventory} setInventory={setInventory} />}
           </>
         )}
       </main>
-      
       <footer className="text-center text-slate-400 text-xs md:text-sm py-8 px-4">&copy; {new Date().getFullYear()} Salpointe Catholic High School CTE Department</footer>
     </div>
   );
@@ -309,207 +282,25 @@ const App = () => {
     );
   }
 
-  // --- NEW: Inventory Manager ---
   function InventoryManager({ inventory, setInventory }) {
     const [localInventory, setLocalInventory] = useState(inventory);
     const [saving, setSaving] = useState(false);
-
-    const handleChange = (item, value) => {
-        setLocalInventory(prev => ({
-            ...prev,
-            [item]: parseInt(value) || 0
-        }));
-    };
-
+    const handleChange = (item, value) => { setLocalInventory(prev => ({ ...prev, [item]: parseInt(value) || 0 })); };
     const handleSave = async () => {
         setSaving(true);
-        try {
-            await setDoc(doc(db, "settings", "inventory"), localInventory);
-            setInventory(localInventory); // Update global state
-            alert("Inventory updated successfully!");
-        } catch (error) {
-            console.error("Error saving inventory:", error);
-            alert("Failed to save inventory.");
-        }
+        try { await setDoc(doc(db, "settings", "inventory"), localInventory); setInventory(localInventory); alert("Inventory updated successfully!"); } catch (error) { console.error("Error saving inventory:", error); alert("Failed to save inventory."); }
         setSaving(false);
     };
-
     return (
         <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-            <div className="bg-slate-800 text-white p-6 flex justify-between items-center">
-                <div>
-                    <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2">
-                        <Settings className="text-amber-400" /> Inventory Manager
-                    </h2>
-                    <p className="text-slate-400 text-sm">Update Total Equipment Counts</p>
-                </div>
-                <button 
-                    onClick={handleSave} 
-                    disabled={saving}
-                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50"
-                >
-                    {saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} 
-                    {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-            </div>
-            
-            <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.entries(localInventory).map(([item, count]) => (
-                        <div key={item} className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex justify-between items-center">
-                            <span className="font-medium text-slate-700 text-sm">{item.replace('*','')}</span>
-                            <input 
-                                type="number" 
-                                min="0" 
-                                value={count} 
-                                onChange={(e) => handleChange(item, e.target.value)}
-                                className="w-20 p-2 border border-slate-300 rounded text-center font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                        </div>
-                    ))}
-                </div>
-            </div>
+            <div className="bg-slate-800 text-white p-6 flex justify-between items-center"><div><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><Settings className="text-amber-400" /> Inventory Manager</h2><p className="text-slate-400 text-sm">Update Total Equipment Counts</p></div><button onClick={handleSave} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50">{saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} {saving ? 'Saving...' : 'Save Changes'}</button></div>
+            <div className="p-6"><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{Object.entries(localInventory).map(([item, count]) => (<div key={item} className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex justify-between items-center"><span className="font-medium text-slate-700 text-sm">{item.replace('*','')}</span><input type="number" min="0" value={count} onChange={(e) => handleChange(item, e.target.value)} className="w-20 p-2 border border-slate-300 rounded text-center font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"/></div>))}</div></div>
         </div>
-    );
-  }
-
-  function MyRequestsView({ currentUser }) {
-    const [myRequests, setMyRequests] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (!currentUser) return;
-        const q = query(collection(db, "requests"), where("email", "==", currentUser.email), orderBy("createdAt", "desc"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A' }));
-            setMyRequests(reqs);
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, [currentUser]);
-
-    const handleCancel = async (id) => { if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "requests", id)); };
-    const getStatusColor = (status) => { switch(status) { case 'Approved': return 'bg-green-100 text-green-700'; case 'Denied': return 'bg-red-100 text-red-700'; case 'Completed': return 'bg-slate-100 text-slate-600'; default: return 'bg-yellow-100 text-yellow-700'; }};
-
-    return (
-        <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-            <div className="bg-red-900 text-white p-6"><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><History className="text-amber-400" /> My Request History</h2></div>
-            <div className="overflow-x-auto">
-                {loading ? <div className="p-8 text-center text-slate-400">Loading...</div> : myRequests.length === 0 ? <div className="p-12 text-center text-slate-500">No requests found.</div> : (
-                    <table className="w-full text-left border-collapse min-w-[700px]">
-                        <thead><tr className="bg-slate-50 border-b text-xs uppercase text-slate-500"><th className="p-4">ID</th><th className="p-4">Dept</th><th className="p-4">Request</th><th className="p-4">Date</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
-                        <tbody className="divide-y divide-slate-100">{myRequests.map((req) => (
-                            <tr key={req.id} className="hover:bg-slate-50"><td className="p-4 text-slate-400 font-mono text-xs">{req.displayId}</td><td className="p-4 capitalize text-sm">{req.dept}</td><td className="p-4 font-semibold text-sm">{req.title}</td><td className="p-4 text-sm">{req.formattedDate}</td><td className="p-4"><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${getStatusColor(req.status)}`}>{req.status}</span></td><td className="p-4">{req.status === 'Pending Review' && <button onClick={() => handleCancel(req.id)} className="text-xs text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-50">Cancel</button>}</td></tr>
-                        ))}</tbody>
-                    </table>
-                )}
-            </div>
-        </div>
-    );
-  }
-
-  function CalendarView() {
-    // ... existing Calendar code (unchanged) ...
-    const today = new Date();
-    const [selectedDate, setSelectedDate] = useState(null);
-    const [filter, setFilter] = useState('all');
-    const [events, setEvents] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-      const q = query(collection(db, "requests")); 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          const fetchedEvents = snapshot.docs.map(doc => {
-                  const data = doc.data();
-                  let dateStr = data.eventDate || data.checkoutDate || data.pickupDate || data.deadline;
-                  if (!dateStr) return null; 
-                  const [y, m, d] = dateStr.split('-').map(Number);
-                  const dateObj = new Date(y, m - 1, d);
-                  return { id: doc.id, title: data.title || data.requestName || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data };
-              }).filter(e => e !== null && e.status === 'Approved'); 
-          setEvents(fetchedEvents);
-          setLoading(false);
-      });
-      return () => unsubscribe();
-    }, []);
-
-    const getDaysInMonth = (date) => {
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      const days = new Date(year, month + 1, 0).getDate();
-      const firstDay = new Date(year, month, 1).getDay();
-      return { days, firstDay, monthName: date.toLocaleString('default', { month: 'long' }), year };
-    };
-    const { days, firstDay, monthName, year } = getDaysInMonth(today);
-    const daysArray = Array.from({ length: days }, (_, i) => i + 1);
-    const empties = Array.from({ length: firstDay }, (_, i) => i);
-    const getEventsForDay = (dayNum) => events.filter(e => e.date.getDate() === dayNum && e.date.getMonth() === today.getMonth() && (filter === 'all' || e.dept === filter));
-    const getGoogleCalendarUrl = (event) => {
-      const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE";
-      const text = `&text=${encodeURIComponent(`[${event.dept}] ${event.title}`)}`;
-      const details = `&details=${encodeURIComponent(`Ref: ${event.displayId}\nRequested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`;
-      const location = `&location=${encodeURIComponent(event.location || 'Salpointe Catholic High School')}`;
-      const y = event.date.getFullYear();
-      const m = String(event.date.getMonth() + 1).padStart(2, '0');
-      const d = String(event.date.getDate()).padStart(2, '0');
-      const dateString = `${y}${m}${d}`;
-      const nextDay = new Date(event.date);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const ny = nextDay.getFullYear();
-      const nm = String(nextDay.getMonth() + 1).padStart(2, '0');
-      const nd = String(nextDay.getDate()).padStart(2, '0');
-      const nextDateString = `${ny}${nm}${nd}`;
-      const dates = `&dates=${dateString}/${nextDateString}`; 
-      return `${baseUrl}${text}${dates}${details}${location}`;
-    };
-
-    return (
-      <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
-        <div className="bg-red-900 text-white p-4 md:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><Calendar className="text-amber-400" size={24} /> Master Schedule</h2><p className="text-red-200 text-sm">Approved requests and checkouts</p></div>
-          <div className="flex bg-red-800 rounded-lg p-1 w-full md:w-auto overflow-x-auto">
-            {['all', Departments.FILM, Departments.PHOTO, Departments.CULINARY].map(f => (
-                <button key={f} onClick={() => setFilter(f)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap capitalize ${filter === f ? 'bg-white text-red-900 shadow-sm' : 'text-red-200 hover:text-white'}`}>{f === 'all' ? 'All' : f}</button>
-            ))}
-          </div>
-        </div>
-        <div className="p-4 md:p-6">
-           <div className="overflow-x-auto pb-2">
-            {loading ? <div className="text-center py-8 text-slate-400">Loading schedule...</div> : (
-              <div className="min-w-[600px] md:min-w-0 grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="bg-slate-50 p-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>)}
-                {empties.map(i => <div key={`empty-${i}`} className="bg-white min-h-[80px] md:min-h-[100px]" />)}
-                {daysArray.map(day => {
-                  const dayEvents = getEventsForDay(day);
-                  return (
-                    <div key={day} className={`bg-white min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-100 relative group cursor-pointer transition-colors ${selectedDate === day ? 'bg-red-50' : 'hover:bg-slate-50'}`} onClick={() => setSelectedDate(selectedDate === day ? null : day)}>
-                      <span className={`text-xs md:text-sm font-medium inline-block w-6 h-6 md:w-7 md:h-7 leading-6 md:leading-7 text-center rounded-full mb-1 ${day === today.getDate() ? 'bg-red-900 text-white' : 'text-slate-700'}`}>{day}</span>
-                      <div className="space-y-1">{dayEvents.map(e => <div key={e.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${e.type === 'checkout' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}>{e.title}</div>)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          {selectedDate && (
-            <div className="mt-4 md:mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200 animate-fade-in">
-              <h4 className="font-bold text-slate-800 mb-3">Events for {monthName} {selectedDate}</h4>
-              {getEventsForDay(selectedDate).length === 0 ? <p className="text-slate-500 text-sm">No approved events.</p> : (
-                <div className="space-y-3">{getEventsForDay(selectedDate).map(e => (
-                    <div key={e.id} className="flex justify-between items-center bg-white p-3 rounded border border-slate-200 shadow-sm">
-                        <div><p className="font-bold text-slate-800 text-sm">{e.title}</p><p className="text-xs text-slate-500 uppercase">{e.dept} • {e.fullName}</p></div>
-                        <a href={getGoogleCalendarUrl(e)} target="_blank" rel="noopener noreferrer" className="bg-slate-50 hover:bg-slate-100 p-2 rounded text-slate-600"><CalendarPlus size={16}/></a>
-                    </div>
-                ))}</div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
     );
   }
 
   function AnalyticsView() {
+    // ... (same as before)
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, deptCounts: {}, topEquipment: [] });
 
@@ -544,6 +335,146 @@ const App = () => {
               <div className="bg-amber-50 rounded-xl p-5 border border-amber-100"><h4 className="text-amber-800 font-bold text-sm uppercase tracking-wide mb-1">Pending Review</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-amber-600">{stats.pending}</span><span className="text-amber-500 text-sm mb-1">awaiting action</span></div></div>
               <div className="md:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-sm"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><PieChart size={18} className="text-slate-400" /> Requests by Department</h3><div className="space-y-4">{Object.entries(stats.deptCounts).sort(([,a], [,b]) => b - a).map(([dept, count]) => { const percentage = (count / stats.total) * 100; return (<div key={dept}><div className="flex justify-between text-sm mb-1"><span className="font-medium text-slate-700">{dept}</span><span className="text-slate-500">{count} requests</span></div><div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden"><div className="bg-red-800 h-3 rounded-full" style={{ width: `${percentage}%` }}></div></div></div>); })}</div></div>
               <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm"><h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Camera size={18} className="text-slate-400" /> Top Equipment</h3><ul className="space-y-3">{stats.topEquipment.map(([item, count], index) => (<li key={item} className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold">{index + 1}</div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-700 truncate">{item.replace(' *', '')}</p><p className="text-xs text-slate-400">{count} checkouts</p></div></li>))}</ul></div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function MyRequestsView({ currentUser }) {
+    const [myRequests, setMyRequests] = useState([]);
+    const [loading, setLoading] = useState(true);
+    useEffect(() => {
+        if (!currentUser) return;
+        const q = query(collection(db, "requests"), where("email", "==", currentUser.email), orderBy("createdAt", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A' }));
+            setMyRequests(reqs);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, [currentUser]);
+    const handleCancel = async (id) => { if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "requests", id)); };
+    const getStatusColor = (status) => { switch(status) { case 'Approved': return 'bg-green-100 text-green-700'; case 'Denied': return 'bg-red-100 text-red-700'; case 'Completed': return 'bg-slate-100 text-slate-600'; default: return 'bg-yellow-100 text-yellow-700'; }};
+    return (
+        <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden"><div className="bg-red-900 text-white p-6"><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2"><History className="text-amber-400" /> My Request History</h2></div><div className="overflow-x-auto">{loading ? <div className="p-8 text-center text-slate-400">Loading...</div> : myRequests.length === 0 ? <div className="p-12 text-center text-slate-500">No requests found.</div> : (<table className="w-full text-left border-collapse min-w-[700px]"><thead><tr className="bg-slate-50 border-b text-xs uppercase text-slate-500"><th className="p-4">ID</th><th className="p-4">Dept</th><th className="p-4">Request</th><th className="p-4">Date</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead><tbody className="divide-y divide-slate-100">{myRequests.map((req) => (<tr key={req.id} className="hover:bg-slate-50"><td className="p-4 text-slate-400 font-mono text-xs">{req.displayId}</td><td className="p-4 capitalize text-sm">{req.dept}</td><td className="p-4 font-semibold text-sm">{req.title}</td><td className="p-4 text-sm">{req.formattedDate}</td><td className="p-4"><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${getStatusColor(req.status)}`}>{req.status}</span></td><td className="p-4">{req.status === 'Pending Review' && <button onClick={() => handleCancel(req.id)} className="text-xs text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-50">Cancel</button>}</td></tr>))}</tbody></table>)}</div></div>
+    );
+  }
+
+  // --- NEW: Calendar with Navigation ---
+
+  function CalendarView() {
+    const [displayDate, setDisplayDate] = useState(new Date()); // Use dynamic date
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [filter, setFilter] = useState('all');
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Handle month switching
+    const nextMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() + 1)));
+    const prevMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() - 1)));
+
+    useEffect(() => {
+      const q = query(collection(db, "requests")); 
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+          const fetchedEvents = snapshot.docs.map(doc => {
+                  const data = doc.data();
+                  let dateStr = data.eventDate || data.checkoutDate || data.pickupDate || data.deadline;
+                  if (!dateStr) return null; 
+                  // Safe Date Parsing (YYYY-MM-DD)
+                  const [y, m, d] = dateStr.split('-').map(Number);
+                  const dateObj = new Date(y, m - 1, d);
+                  return { id: doc.id, title: data.title || data.requestName || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data };
+              }).filter(e => e !== null && e.status === 'Approved'); 
+          setEvents(fetchedEvents);
+          setLoading(false);
+      });
+      return () => unsubscribe();
+    }, []);
+
+    const getDaysInMonth = (date) => {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const days = new Date(year, month + 1, 0).getDate();
+      const firstDay = new Date(year, month, 1).getDay();
+      return { days, firstDay, monthName: date.toLocaleString('default', { month: 'long' }), year };
+    };
+    
+    const { days, firstDay, monthName, year } = getDaysInMonth(displayDate);
+    const daysArray = Array.from({ length: days }, (_, i) => i + 1);
+    const empties = Array.from({ length: firstDay }, (_, i) => i);
+
+    const getEventsForDay = (dayNum) => events.filter(e => e.date.getDate() === dayNum && e.date.getMonth() === displayDate.getMonth() && e.date.getFullYear() === displayDate.getFullYear() && (filter === 'all' || e.dept === filter));
+    const getGoogleCalendarUrl = (event) => {
+      const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE";
+      const text = `&text=${encodeURIComponent(`[${event.dept}] ${event.title}`)}`;
+      const details = `&details=${encodeURIComponent(`Ref: ${event.displayId}\nRequested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`;
+      const location = `&location=${encodeURIComponent(event.location || 'Salpointe Catholic High School')}`;
+      const y = event.date.getFullYear();
+      const m = String(event.date.getMonth() + 1).padStart(2, '0');
+      const d = String(event.date.getDate()).padStart(2, '0');
+      const dateString = `${y}${m}${d}`;
+      const nextDay = new Date(event.date);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const ny = nextDay.getFullYear();
+      const nm = String(nextDay.getMonth() + 1).padStart(2, '0');
+      const nd = String(nextDay.getDate()).padStart(2, '0');
+      const nextDateString = `${ny}${nm}${nd}`;
+      const dates = `&dates=${dateString}/${nextDateString}`; 
+      return `${baseUrl}${text}${dates}${details}${location}`;
+    };
+
+    return (
+      <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+        {/* Calendar Header */}
+        <div className="bg-red-900 text-white p-4 md:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+             <div className="flex items-center gap-4 mb-1">
+                 <button onClick={prevMonth} className="p-1 hover:bg-red-800 rounded-full transition-colors"><ChevronLeft size={24}/></button>
+                 <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2">{monthName} {year}</h2>
+                 <button onClick={nextMonth} className="p-1 hover:bg-red-800 rounded-full transition-colors"><ChevronRight size={24}/></button>
+             </div>
+             <p className="text-red-200 text-sm ml-1">Approved requests and checkouts</p>
+          </div>
+          <div className="flex bg-red-800 rounded-lg p-1 w-full md:w-auto overflow-x-auto">
+            {['all', Departments.FILM, Departments.PHOTO, Departments.CULINARY].map(f => (
+                <button key={f} onClick={() => setFilter(f)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap capitalize ${filter === f ? 'bg-white text-red-900 shadow-sm' : 'text-red-200 hover:text-white'}`}>{f === 'all' ? 'All' : f}</button>
+            ))}
+          </div>
+        </div>
+        <div className="p-4 md:p-6">
+           <div className="overflow-x-auto pb-2">
+            {loading ? <div className="text-center py-8 text-slate-400">Loading schedule...</div> : (
+              <div className="min-w-[600px] md:min-w-0 grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="bg-slate-50 p-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>)}
+                {empties.map(i => <div key={`empty-${i}`} className="bg-white min-h-[80px] md:min-h-[100px]" />)}
+                {daysArray.map(day => {
+                  const dayEvents = getEventsForDay(day);
+                  // Check if date is today (must match current month/year too)
+                  const isToday = day === new Date().getDate() && displayDate.getMonth() === new Date().getMonth() && displayDate.getFullYear() === new Date().getFullYear();
+                  
+                  return (
+                    <div key={day} className={`bg-white min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-100 relative group cursor-pointer transition-colors ${selectedDate === day ? 'bg-red-50' : 'hover:bg-slate-50'}`} onClick={() => setSelectedDate(selectedDate === day ? null : day)}>
+                      <span className={`text-xs md:text-sm font-medium inline-block w-6 h-6 md:w-7 md:h-7 leading-6 md:leading-7 text-center rounded-full mb-1 ${isToday ? 'bg-red-900 text-white' : 'text-slate-700'}`}>{day}</span>
+                      <div className="space-y-1">{dayEvents.map(e => <div key={e.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${e.type === 'checkout' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}>{e.title}</div>)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          {selectedDate && (
+            <div className="mt-4 md:mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200 animate-fade-in">
+              <h4 className="font-bold text-slate-800 mb-3">Events for {monthName} {selectedDate}</h4>
+              {getEventsForDay(selectedDate).length === 0 ? <p className="text-slate-500 text-sm">No approved events.</p> : (
+                <div className="space-y-3">{getEventsForDay(selectedDate).map(e => (
+                    <div key={e.id} className="flex justify-between items-center bg-white p-3 rounded border border-slate-200 shadow-sm">
+                        <div><p className="font-bold text-slate-800 text-sm">{e.title}</p><p className="text-xs text-slate-500 uppercase">{e.dept} • {e.fullName}</p></div>
+                        <a href={getGoogleCalendarUrl(e)} target="_blank" rel="noopener noreferrer" className="bg-slate-50 hover:bg-slate-100 p-2 rounded text-slate-600"><CalendarPlus size={16}/></a>
+                    </div>
+                ))}</div>
+              )}
             </div>
           )}
         </div>
