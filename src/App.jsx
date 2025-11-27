@@ -26,10 +26,11 @@ import {
   Save,
   LogOut,
   Hash,
-  AlertCircle // Added AlertCircle for inventory warnings
+  AlertCircle,
+  AlertTriangle // Added AlertTriangle for modal
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
-import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where } from 'firebase/firestore'; // Added getDocs, where
+import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where } from 'firebase/firestore'; 
 import { signInWithPopup, signOut } from 'firebase/auth';
 import emailjs from '@emailjs/browser'; 
 
@@ -51,13 +52,12 @@ const ALLOWED_ADMINS = [
 ];
 
 // *** MASTER INVENTORY LIMITS ***
-// Define exactly how many of each item you own here.
 const INVENTORY_LIMITS = {
-  'Cinema Camera Kit *': 1,       // <--- Change this number
+  'Cinema Camera Kit *': 1,       
   'Gimbal / Stabilizer *': 6,
   'DJI Mic Kit (Wireless)': 4,
   'DJI Flip Drone *': 1,
-  'Tripod': 4,                    // Shared pool for both departments
+  'Tripod': 4,                    
   'Lighting Kit': 6,
   'DSLR Camera Body': 6,
   'Zoom Lens (18-55mm)': 6,
@@ -130,6 +130,17 @@ const App = () => {
           
           {/* Global Navigation */}
           <nav className="flex items-center gap-1 md:gap-2 ml-auto">
+            {/* Only show "Back to Hub" if NOT in a form (forms have their own smart back button now) */}
+            {!isRequestView && currentView !== 'home' && (
+               <button 
+                onClick={goHome}
+                className="text-xs md:text-sm bg-red-800 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 mr-2"
+              >
+                <ArrowLeft size={16} />
+                Back
+              </button>
+            )}
+
             <button 
               onClick={goHome}
               className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${isRequestView ? 'bg-red-950 text-white shadow-inner' : 'text-red-100 hover:bg-red-800 hover:text-white'}`}
@@ -162,11 +173,11 @@ const App = () => {
         ) : (
           <>
             {currentView === 'home' && <Dashboard onViewChange={setCurrentView} />}
-            {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} />}
-            {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} />}
-            {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} />}
-            {currentView === Departments.CULINARY && <CulinaryForm setSubmitted={setSubmitted} />}
-            {currentView === Departments.PHOTO && <PhotoForm setSubmitted={setSubmitted} />}
+            {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goHome} />}
+            {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goHome} />}
+            {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goHome} />}
+            {currentView === Departments.CULINARY && <CulinaryForm setSubmitted={setSubmitted} onCancel={goHome} />}
+            {currentView === Departments.PHOTO && <PhotoForm setSubmitted={setSubmitted} onCancel={goHome} />}
             {currentView === Departments.CALENDAR && <CalendarView />}
             {currentView === Departments.QUEUE && (
                 <RequestQueueView 
@@ -309,7 +320,6 @@ const App = () => {
   // --- Calendar Component ---
 
   function CalendarView() {
-    // ... existing Calendar code ...
     const today = new Date();
     const [selectedDate, setSelectedDate] = useState(null);
     const [filter, setFilter] = useState('all');
@@ -490,7 +500,6 @@ const App = () => {
   // --- Real-Time Request Queue Component ---
 
   function RequestQueueView({ adminMode, setAdminMode, setAdminUser, ALLOWED_ADMINS }) {
-    // ... existing Queue code ...
     const [requests, setRequests] = useState([]);
     const [filter, setFilter] = useState('all');
     const [loading, setLoading] = useState(true);
@@ -780,12 +789,13 @@ const App = () => {
     );
   }
 
-  function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {} }) {
+  function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel }) {
     const formRef = useRef(null);
     const draftKey = getDraftKey(title);
+    const [showExitPrompt, setShowExitPrompt] = useState(false);
 
-    const handleSaveDraft = (e) => {
-        e.preventDefault();
+    // Save Draft Logic
+    const saveDraftToStorage = () => {
         const formData = new FormData(formRef.current);
         const data = {};
         for (const [key, value] of formData.entries()) {
@@ -797,7 +807,31 @@ const App = () => {
              }
         }
         localStorage.setItem(draftKey, JSON.stringify(data));
+        return true;
+    };
+
+    // Button Actions
+    const handleSaveDraftButton = (e) => {
+        e.preventDefault();
+        saveDraftToStorage();
         alert('Draft saved! You can resume this form later on this device.');
+    };
+
+    const handleCancelRequest = () => {
+        // Show modal to ask user what to do
+        setShowExitPrompt(true);
+    };
+
+    const confirmSaveAndExit = () => {
+        saveDraftToStorage();
+        setShowExitPrompt(false);
+        onCancel(); // Go home
+    };
+
+    const confirmDiscardAndExit = () => {
+        localStorage.removeItem(draftKey); // Clear draft
+        setShowExitPrompt(false);
+        onCancel(); // Go home
     };
 
     const handleSubmit = async (e) => {
@@ -852,32 +886,88 @@ const App = () => {
     };
 
     return (
-      <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden">
+      <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden relative">
+        {/* CANCEL PROMPT MODAL */}
+        {showExitPrompt && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4 animate-fade-in">
+                <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 text-center">
+                    <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-600">
+                        <AlertTriangle size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 mb-2">Unsaved Changes</h3>
+                    <p className="text-slate-600 mb-6">
+                        You have started a request. Do you want to save your progress as a draft before leaving?
+                    </p>
+                    <div className="flex flex-col gap-3">
+                        <button 
+                            onClick={confirmSaveAndExit}
+                            className="w-full bg-slate-800 text-white py-3 rounded-lg font-semibold hover:bg-slate-900 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Save size={18} /> Save Draft & Exit
+                        </button>
+                        <button 
+                            onClick={confirmDiscardAndExit}
+                            className="w-full bg-white border border-red-200 text-red-600 py-3 rounded-lg font-semibold hover:bg-red-50 transition-colors"
+                        >
+                            Discard Changes & Exit
+                        </button>
+                        <button 
+                            onClick={() => setShowExitPrompt(false)}
+                            className="w-full text-slate-400 py-2 hover:text-slate-600 text-sm"
+                        >
+                            Keep Editing
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         <div className={`h-2 ${colorClass}`}></div>
         <div className="p-5 md:p-8">
-          <div className="flex items-center gap-3 mb-6 md:mb-8 pb-4 border-b border-slate-100">
-            <div className={`p-3 rounded-lg ${colorClass} bg-opacity-10 text-opacity-100`}>
-              <Icon size={24} className={`md:w-7 md:h-7 ${colorClass.replace('bg-', 'text-')}`} />
+          <div className="flex items-center justify-between mb-6 md:mb-8 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+                <div className={`p-3 rounded-lg ${colorClass} bg-opacity-10 text-opacity-100`}>
+                <Icon size={24} className={`md:w-7 md:h-7 ${colorClass.replace('bg-', 'text-')}`} />
+                </div>
+                <div>
+                <h2 className="text-xl md:text-2xl font-bold text-slate-800">{title} Request</h2>
+                <p className="text-slate-500 text-xs md:text-sm">Please fill out all details accurately.</p>
+                </div>
             </div>
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold text-slate-800">{title} Request</h2>
-              <p className="text-slate-500 text-xs md:text-sm">Please fill out all details accurately.</p>
-            </div>
+            
+            {/* NEW SMART BACK BUTTON */}
+            <button 
+                type="button"
+                onClick={handleCancelRequest}
+                className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors"
+                title="Cancel & Go Back"
+            >
+                <X size={24} />
+            </button>
           </div>
           
           <form ref={formRef} onSubmit={handleSubmit}>
             <ContactSection initialData={initialData} />
             {children}
             
-            <div className="mt-8 flex justify-end gap-3">
+            <div className="mt-8 flex flex-col-reverse sm:flex-row justify-end gap-3">
+              {/* CANCEL BUTTON IN FOOTER */}
               <button 
                 type="button" 
-                onClick={handleSaveDraft}
-                className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
+                onClick={handleCancelRequest}
+                className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-500 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 hover:text-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+
+              <button 
+                type="button" 
+                onClick={handleSaveDraftButton}
+                className="flex items-center justify-center gap-2 bg-white border border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
               >
                 <Save size={18} /> Save Draft
               </button>
-              <button type="submit" className="w-full md:w-auto bg-red-900 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-800 transition-colors shadow-lg active:scale-95 md:active:scale-100">
+              <button type="submit" className="w-full sm:w-auto bg-red-900 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-800 transition-colors shadow-lg active:scale-95 md:active:scale-100">
                 Submit Request
               </button>
             </div>
@@ -889,7 +979,7 @@ const App = () => {
 
   // --- Department Specific Forms (Updated to have name attributes) ---
 
-  function FilmForm({ setSubmitted }) {
+  function FilmForm({ setSubmitted, onCancel }) {
     const title = 'Film';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
@@ -965,7 +1055,7 @@ const App = () => {
 
 
     return (
-      <FormContainer title={title} icon={Video} colorClass="bg-blue-600" setSubmitted={setSubmitted} initialData={initialData}>
+      <FormContainer title={title} icon={Video} colorClass="bg-blue-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel}>
         <input type="hidden" name="requestType" value={requestType} />
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-700 mb-2">Request Type</label>
@@ -1050,12 +1140,12 @@ const App = () => {
     );
   }
 
-  function GraphicDesignForm({ setSubmitted }) {
+  function GraphicDesignForm({ setSubmitted, onCancel }) {
     const title = 'Graphic';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     return (
-      <FormContainer title={title} icon={PenTool} colorClass="bg-purple-600" setSubmitted={setSubmitted} initialData={initialData}>
+      <FormContainer title={title} icon={PenTool} colorClass="bg-purple-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel}>
         <div className="space-y-4">
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Project Type</label><select name="projectType" defaultValue={initialData.projectType} className="w-full rounded-md border-slate-300 border p-2.5 text-sm shadow-sm bg-white"><option>Event Poster / Flyer</option><option>Logo Design</option><option>Website Design</option><option>T-Shirt / Merch</option></select></div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1068,12 +1158,12 @@ const App = () => {
     );
   }
 
-  function BusinessForm({ setSubmitted }) {
+  function BusinessForm({ setSubmitted, onCancel }) {
     const title = 'Business';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     return (
-      <FormContainer title={title} icon={Briefcase} colorClass="bg-emerald-600" setSubmitted={setSubmitted} initialData={initialData}>
+      <FormContainer title={title} icon={Briefcase} colorClass="bg-emerald-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel}>
         <div className="space-y-4">
           {/* Business Name is now covered by Request Name */}
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Assistance Needed</label><select name="assistanceType" defaultValue={initialData.assistanceType} className="w-full rounded-md border-slate-300 border p-2.5 text-sm shadow-sm bg-white"><option>Business Plan Review</option><option>Financial Modeling Help</option><option>Marketing Strategy</option><option>General Mentorship</option></select></div>
@@ -1083,12 +1173,12 @@ const App = () => {
     );
   }
 
-  function CulinaryForm({ setSubmitted }) {
+  function CulinaryForm({ setSubmitted, onCancel }) {
     const title = 'Culinary';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     return (
-      <FormContainer title={title} icon={Utensils} colorClass="bg-orange-500" setSubmitted={setSubmitted} initialData={initialData}>
+      <FormContainer title={title} icon={Utensils} colorClass="bg-orange-500" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel}>
         <div className="space-y-4">
           {/* Event Name covered by Request Name */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1103,7 +1193,7 @@ const App = () => {
     );
   }
 
-  function PhotoForm({ setSubmitted }) {
+  function PhotoForm({ setSubmitted, onCancel }) {
     const title = 'Photo';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
@@ -1167,7 +1257,7 @@ const App = () => {
     }, [dateRange, requestType]);
 
     return (
-      <FormContainer title={title} icon={Camera} colorClass="bg-pink-600" setSubmitted={setSubmitted} initialData={initialData}>
+      <FormContainer title={title} icon={Camera} colorClass="bg-pink-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel}>
         <input type="hidden" name="requestType" value={requestType} />
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-700 mb-2">Request Type</label>
