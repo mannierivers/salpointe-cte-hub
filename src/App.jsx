@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, 
   Video, 
@@ -22,7 +22,8 @@ import {
   Check,
   X,
   Eye, 
-  CalendarPlus // Added CalendarPlus icon
+  CalendarPlus,
+  Save // Added Save icon
 } from 'lucide-react';
 import { db } from './firebase-config'; // Import database connection
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -38,6 +39,8 @@ const Departments = {
   CALENDAR: 'calendar',
   QUEUE: 'queue'
 };
+
+const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
 
 const App = () => {
   const [currentView, setCurrentView] = useState('home');
@@ -204,7 +207,7 @@ const App = () => {
 
   // --- Shared Form Components ---
 
-  function ContactSection() {
+  function ContactSection({ initialData = {} }) {
     return (
       <div className="bg-slate-50 p-5 md:p-6 rounded-lg border border-slate-200 mb-6">
         <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
@@ -213,15 +216,15 @@ const App = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">Full Name</label>
-            <input name="fullName" type="text" className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm" placeholder="Jane Doe" required />
+            <input name="fullName" type="text" defaultValue={initialData.fullName || ''} className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm" placeholder="Jane Doe" required />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">Salpointe Email</label>
-            <input name="email" type="email" className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm" placeholder="jdoe@salpointe.org" required />
+            <input name="email" type="email" defaultValue={initialData.email || ''} className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm" placeholder="jdoe@salpointe.org" required />
           </div>
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-slate-600 mb-1">Role</label>
-            <select name="role" className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm bg-white">
+            <select name="role" defaultValue={initialData.role || 'Student'} className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm bg-white">
               <option>Student</option>
               <option>Faculty / Staff</option>
               <option>Club Representative</option>
@@ -302,14 +305,11 @@ const App = () => {
       const details = `&details=${encodeURIComponent(`Requested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`;
       const location = `&location=${encodeURIComponent(event.location || 'Salpointe Catholic High School')}`;
       
-      // Format Dates for GCal (YYYYMMDD)
-      // Note: We are doing All Day events for simplicity to avoid timezone math complexity
       const y = event.date.getFullYear();
       const m = String(event.date.getMonth() + 1).padStart(2, '0');
       const d = String(event.date.getDate()).padStart(2, '0');
       const dateString = `${y}${m}${d}`;
       
-      // For all day events, start date is YYYYMMDD and end date is YYYYMMDD + 1 day
       const nextDay = new Date(event.date);
       nextDay.setDate(nextDay.getDate() + 1);
       const ny = nextDay.getFullYear();
@@ -317,7 +317,7 @@ const App = () => {
       const nd = String(nextDay.getDate()).padStart(2, '0');
       const nextDateString = `${ny}${nm}${nd}`;
 
-      const dates = `&dates=${dateString}/${nextDateString}`; // All day event format
+      const dates = `&dates=${dateString}/${nextDateString}`; 
 
       return `${baseUrl}${text}${dates}${details}${location}`;
     };
@@ -374,7 +374,6 @@ const App = () => {
             )}
           </div>
           
-          {/* Detailed Daily View with Google Calendar Button */}
           {selectedDate && (
             <div className="mt-4 md:mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200 animate-fade-in">
               <h4 className="font-bold text-slate-800 mb-3">Events for {monthName} {selectedDate}</h4>
@@ -423,19 +422,16 @@ const App = () => {
     const [filter, setFilter] = useState('all');
     const [loading, setLoading] = useState(true);
     const [adminMode, setAdminMode] = useState(false);
-    const [selectedRequest, setSelectedRequest] = useState(null); // State for modal
+    const [selectedRequest, setSelectedRequest] = useState(null); 
     
     // FETCH REAL DATA
     useEffect(() => {
-      // Create a query against the collection
       const q = query(collection(db, "requests"), orderBy("createdAt", "desc"));
       
-      // Listen for updates
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const reqs = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          // Convert Firestore Timestamp to readable date
           formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A'
         }));
         setRequests(reqs);
@@ -445,13 +441,11 @@ const App = () => {
       return () => unsubscribe();
     }, []);
 
-    // ADMIN ACTIONS
     const handleStatusUpdate = async (id, newStatus) => {
       const requestRef = doc(db, "requests", id);
       await updateDoc(requestRef, {
         status: newStatus
       });
-      // Also update selectedRequest if it's open, so the modal reflects the change
       if (selectedRequest && selectedRequest.id === id) {
           setSelectedRequest(prev => ({...prev, status: newStatus}));
       }
@@ -468,7 +462,7 @@ const App = () => {
       if (adminMode) {
         setAdminMode(false);
       } else {
-        const pin = prompt("Enter Admin PIN:"); // REMOVED HINT
+        const pin = prompt("Enter Admin PIN:"); 
         if (pin === "1950") setAdminMode(true);
       }
     };
@@ -482,7 +476,7 @@ const App = () => {
         case 'Approved': return 'bg-green-100 text-green-700';
         case 'Denied': return 'bg-red-100 text-red-700';
         case 'Completed': return 'bg-slate-100 text-slate-600';
-        default: return 'bg-yellow-100 text-yellow-700'; // Pending
+        default: return 'bg-yellow-100 text-yellow-700'; 
       }
     };
 
@@ -537,13 +531,10 @@ const App = () => {
                     </h4>
                     <div className="bg-slate-50 rounded-lg p-4 space-y-4 border border-slate-100">
                       {Object.entries(selectedRequest).map(([key, value]) => {
-                        // Filter out system fields we already displayed or don't want to show
                         if(['id', 'dept', 'status', 'fullName', 'email', 'role', 'formattedDate', 'createdAt', 'title'].includes(key)) return null;
                         
-                        // Formatting labels
                         const label = key.replace(/([A-Z])/g, ' $1').trim();
                         
-                        // Handle Arrays (like equipment)
                         if(Array.isArray(value)) return (
                            <div key={key}>
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">{label}</label>
@@ -553,7 +544,6 @@ const App = () => {
                            </div>
                         );
 
-                        // Handle normal fields
                         return (
                           <div key={key}>
                             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">{label}</label>
@@ -622,7 +612,7 @@ const App = () => {
                   <th className="p-4">Requester</th>
                   <th className="p-4">Submitted</th>
                   <th className="p-4">Status</th>
-                  <th className="p-4">Action</th> {/* Added Action Column */}
+                  <th className="p-4">Action</th> 
                   {adminMode && <th className="p-4">Admin</th>}
                 </tr>
               </thead>
@@ -673,14 +663,31 @@ const App = () => {
   }
 
   function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted }) {
+    const formRef = useRef(null);
+    const draftKey = getDraftKey(title);
+
+    const handleSaveDraft = (e) => {
+        e.preventDefault();
+        const formData = new FormData(formRef.current);
+        const data = {};
+        for (const [key, value] of formData.entries()) {
+             if (data[key]) {
+                  if (!Array.isArray(data[key])) data[key] = [data[key]];
+                  data[key].push(value);
+             } else {
+                  data[key] = value;
+             }
+        }
+        localStorage.setItem(draftKey, JSON.stringify(data));
+        alert('Draft saved! You can resume this form later on this device.');
+    };
+
     const handleSubmit = async (e) => {
       e.preventDefault();
       
       const formData = new FormData(e.target);
-      // FIXED: Handle multiple values (like checkbox arrays) correctly
       const data = {};
       
-      // Iterate explicitly to handle arrays
       for (const [key, value] of formData.entries()) {
           if (data[key]) {
               if (!Array.isArray(data[key])) {
@@ -700,6 +707,9 @@ const App = () => {
           createdAt: new Date(),
           title: data.eventName || data.projectType || data.businessName || "New Request" 
         });
+        
+        // Clear draft after successful submission
+        localStorage.removeItem(draftKey);
         setSubmitted(true);
       } catch (error) {
         console.error("Error adding document: ", error);
@@ -721,11 +731,18 @@ const App = () => {
             </div>
           </div>
           
-          <form onSubmit={handleSubmit}>
-            <ContactSection />
+          <form ref={formRef} onSubmit={handleSubmit}>
+            <ContactSection initialData={children.props.initialData} />
             {children}
             
-            <div className="mt-8 flex justify-end">
+            <div className="mt-8 flex justify-end gap-3">
+              <button 
+                type="button" 
+                onClick={handleSaveDraft}
+                className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
+              >
+                <Save size={18} /> Save Draft
+              </button>
               <button type="submit" className="w-full md:w-auto bg-red-900 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-800 transition-colors shadow-lg active:scale-95 md:active:scale-100">
                 Submit Request
               </button>
@@ -739,9 +756,13 @@ const App = () => {
   // --- Department Specific Forms (Updated to have name attributes) ---
 
   function FilmForm({ setSubmitted }) {
-    const [requestType, setRequestType] = useState('checkout'); 
+    const title = 'Film';
+    const draftKey = getDraftKey(title);
+    const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
+    const [requestType, setRequestType] = useState(initialData.requestType || 'checkout'); 
+
     return (
-      <FormContainer title="Film" icon={Video} colorClass="bg-blue-600" setSubmitted={setSubmitted}>
+      <FormContainer title={title} icon={Video} colorClass="bg-blue-600" setSubmitted={setSubmitted} initialData={initialData}>
         <input type="hidden" name="requestType" value={requestType} />
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-700 mb-2">Request Type</label>
@@ -757,29 +778,41 @@ const App = () => {
         {requestType === 'checkout' ? (
           <div className="space-y-4 animate-fade-in">
              <div className="bg-blue-50 p-4 rounded-md border border-blue-100 text-sm text-blue-800 mb-4"><strong>Note:</strong> Equipment must be returned by 8:00 AM the following school day.</div>
-             <label className="block text-sm font-medium text-slate-700">Select Equipment Needed:</label>
+             <label className="block text-sm font-medium text-slate-700">
+               Select Equipment Needed: <span className="text-red-500 text-xs font-normal ml-1">* Requires Training</span>
+             </label>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-               {['Cinema Camera Kit', 'Gimbal / Stabilizer', 'DJI Mic Kit (Wireless)', 'DJI Flip Drone', 'Tripod', 'Lighting Kit'].map((item) => (
+               {['Cinema Camera Kit *', 'Gimbal / Stabilizer *', 'DJI Mic Kit (Wireless)', 'DJI Flip Drone *', 'Tripod', 'Lighting Kit'].map((item) => (
                  <label key={item} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors active:bg-blue-50">
-                   <input type="checkbox" name="equipment" value={item} className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" />
+                   <input type="checkbox" name="equipment" value={item} defaultChecked={initialData.equipment?.includes(item)} className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" />
                    <span className="text-slate-700 text-sm">{item}</span>
                  </label>
                ))}
              </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Checkout Date</label><input name="checkoutDate" type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Checkout Date</label><input name="checkoutDate" defaultValue={initialData.checkoutDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+             </div>
+
+             {/* Terms & Conditions */}
+             <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" required className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300" />
+                  <span className="text-sm text-slate-700 leading-tight">
+                    <strong>Terms & Conditions:</strong> I agree to pay for equipment in full at market value in the event of damage beyond repair, lost, or stolen equipment.
+                  </span>
+                </label>
              </div>
           </div>
         ) : (
           <div className="space-y-4 animate-fade-in">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Name</label><input name="eventName" type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Varsity Football" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Name</label><input name="eventName" defaultValue={initialData.eventName} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Varsity Football" required /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input name="eventDate" type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-              <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label><input name="startTime" type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input name="eventDate" defaultValue={initialData.eventDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label><input name="startTime" defaultValue={initialData.startTime} type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
             </div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Service Needed</label><select name="serviceType" className="w-full rounded-md border-slate-300 border p-2.5 text-sm bg-white"><option>Live Broadcast (Stream)</option><option>Event Recording (Edited later)</option><option>Raw Footage Only</option></select></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Details</label><textarea name="details" className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-24" placeholder="Describe specifics..."></textarea></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Service Needed</label><select name="serviceType" defaultValue={initialData.serviceType} className="w-full rounded-md border-slate-300 border p-2.5 text-sm bg-white"><option>Live Broadcast (Stream)</option><option>Event Recording (Edited later)</option><option>Raw Footage Only</option></select></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Details</label><textarea name="details" defaultValue={initialData.details} className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-24" placeholder="Describe specifics..."></textarea></div>
           </div>
         )}
       </FormContainer>
@@ -787,53 +820,65 @@ const App = () => {
   }
 
   function GraphicDesignForm({ setSubmitted }) {
+    const title = 'Graphic';
+    const draftKey = getDraftKey(title);
+    const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     return (
-      <FormContainer title="Graphic" icon={PenTool} colorClass="bg-purple-600" setSubmitted={setSubmitted}>
+      <FormContainer title={title} icon={PenTool} colorClass="bg-purple-600" setSubmitted={setSubmitted} initialData={initialData}>
         <div className="space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Project Type</label><select name="projectType" className="w-full rounded-md border-slate-300 border p-2.5 text-sm shadow-sm bg-white"><option>Event Poster / Flyer</option><option>Logo Design</option><option>Website Design</option><option>T-Shirt / Merch</option></select></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Project Type</label><select name="projectType" defaultValue={initialData.projectType} className="w-full rounded-md border-slate-300 border p-2.5 text-sm shadow-sm bg-white"><option>Event Poster / Flyer</option><option>Logo Design</option><option>Website Design</option><option>T-Shirt / Merch</option></select></div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Dimensions</label><input name="dimensions" type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., 11x17" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Deadline</label><input name="deadline" type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Dimensions</label><input name="dimensions" defaultValue={initialData.dimensions} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., 11x17" /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Deadline</label><input name="deadline" defaultValue={initialData.deadline} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
           </div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Design Brief</label><textarea name="brief" className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-32" placeholder="Text content, colors, inspiration..." required></textarea></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Design Brief</label><textarea name="brief" defaultValue={initialData.brief} className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-32" placeholder="Text content, colors, inspiration..." required></textarea></div>
         </div>
       </FormContainer>
     );
   }
 
   function BusinessForm({ setSubmitted }) {
+    const title = 'Business';
+    const draftKey = getDraftKey(title);
+    const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     return (
-      <FormContainer title="Business" icon={Briefcase} colorClass="bg-emerald-600" setSubmitted={setSubmitted}>
+      <FormContainer title={title} icon={Briefcase} colorClass="bg-emerald-600" setSubmitted={setSubmitted} initialData={initialData}>
         <div className="space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Business Name</label><input name="businessName" type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="Project Alpha" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Assistance Needed</label><select name="assistanceType" className="w-full rounded-md border-slate-300 border p-2.5 text-sm shadow-sm bg-white"><option>Business Plan Review</option><option>Financial Modeling Help</option><option>Marketing Strategy</option><option>General Mentorship</option></select></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Idea Description</label><textarea name="description" className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-40" placeholder="Briefly describe your product..." required></textarea></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Business Name</label><input name="businessName" defaultValue={initialData.businessName} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="Project Alpha" /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Assistance Needed</label><select name="assistanceType" defaultValue={initialData.assistanceType} className="w-full rounded-md border-slate-300 border p-2.5 text-sm shadow-sm bg-white"><option>Business Plan Review</option><option>Financial Modeling Help</option><option>Marketing Strategy</option><option>General Mentorship</option></select></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Idea Description</label><textarea name="description" defaultValue={initialData.description} className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-40" placeholder="Briefly describe your product..." required></textarea></div>
         </div>
       </FormContainer>
     );
   }
 
   function CulinaryForm({ setSubmitted }) {
+    const title = 'Culinary';
+    const draftKey = getDraftKey(title);
+    const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     return (
-      <FormContainer title="Culinary" icon={Utensils} colorClass="bg-orange-500" setSubmitted={setSubmitted}>
+      <FormContainer title={title} icon={Utensils} colorClass="bg-orange-500" setSubmitted={setSubmitted} initialData={initialData}>
         <div className="space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Name</label><input name="eventName" type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Faculty Luncheon" required /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Name</label><input name="eventName" defaultValue={initialData.eventName} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Faculty Luncheon" required /></div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Date</label><input name="eventDate" type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Serve Time</label><input name="serveTime" type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Guest Count</label><input name="guestCount" type="number" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" min="1" placeholder="50" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Date</label><input name="eventDate" defaultValue={initialData.eventDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Serve Time</label><input name="serveTime" defaultValue={initialData.serveTime} type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Guest Count</label><input name="guestCount" defaultValue={initialData.guestCount} type="number" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" min="1" placeholder="50" required /></div>
           </div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Service Style</label><select name="serviceStyle" className="w-full rounded-md border-slate-300 border p-2.5 text-sm shadow-sm bg-white"><option>Buffet Style</option><option>Boxed Lunches</option><option>Plated Service</option><option>Appetizers</option></select></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Menu/Dietary Notes</label><textarea name="menuNotes" className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-24" placeholder="Preferences, allergies..." required></textarea></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Service Style</label><select name="serviceStyle" defaultValue={initialData.serviceStyle} className="w-full rounded-md border-slate-300 border p-2.5 text-sm shadow-sm bg-white"><option>Buffet Style</option><option>Boxed Lunches</option><option>Plated Service</option><option>Appetizers</option></select></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Menu/Dietary Notes</label><textarea name="menuNotes" defaultValue={initialData.menuNotes} className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-24" placeholder="Preferences, allergies..." required></textarea></div>
         </div>
       </FormContainer>
     );
   }
 
   function PhotoForm({ setSubmitted }) {
-    const [requestType, setRequestType] = useState('service'); 
+    const title = 'Photo';
+    const draftKey = getDraftKey(title);
+    const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
+    const [requestType, setRequestType] = useState(initialData.requestType || 'service'); 
     return (
-      <FormContainer title="Photo" icon={Camera} colorClass="bg-pink-600" setSubmitted={setSubmitted}>
+      <FormContainer title={title} icon={Camera} colorClass="bg-pink-600" setSubmitted={setSubmitted} initialData={initialData}>
         <input type="hidden" name="requestType" value={requestType} />
         <div className="mb-6">
           <label className="block text-sm font-medium text-slate-700 mb-2">Request Type</label>
@@ -849,25 +894,35 @@ const App = () => {
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                {['DSLR Camera Body', 'Zoom Lens (18-55mm)', 'Telephoto Lens (70-200mm)', 'Portrait Lens (50mm)', 'SD Card Reader', 'Tripod', 'Flash Unit'].map((item) => (
                  <label key={item} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer active:bg-pink-50">
-                   <input type="checkbox" name="equipment" value={item} className="w-5 h-5 text-pink-600 rounded focus:ring-pink-500" />
+                   <input type="checkbox" name="equipment" value={item} defaultChecked={initialData.equipment?.includes(item)} className="w-5 h-5 text-pink-600 rounded focus:ring-pink-500" />
                    <span className="text-slate-700 text-sm">{item}</span>
                  </label>
                ))}
              </div>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Pickup Date</label><input name="pickupDate" type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Pickup Date</label><input name="pickupDate" defaultValue={initialData.pickupDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+             </div>
+
+             {/* Terms & Conditions for Photo as well */}
+             <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" required className="mt-1 w-5 h-5 text-pink-600 rounded focus:ring-pink-500 border-gray-300" />
+                  <span className="text-sm text-slate-700 leading-tight">
+                    <strong>Terms & Conditions:</strong> I agree to pay for equipment in full at market value in the event of damage beyond repair, lost, or stolen equipment.
+                  </span>
+                </label>
              </div>
           </div>
         ) : (
           <div className="space-y-4 animate-fade-in">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Name</label><input name="eventName" type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Homecoming" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Name</label><input name="eventName" defaultValue={initialData.eventName} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Homecoming" required /></div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input name="eventDate" type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-              <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label><input name="startTime" type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input name="eventDate" defaultValue={initialData.eventDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label><input name="startTime" defaultValue={initialData.startTime} type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
             </div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Location</label><input name="location" type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Gym" /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Specific Shots</label><textarea name="shotList" className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-24" placeholder="Key moments..."></textarea></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Location</label><input name="location" defaultValue={initialData.location} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Gym" /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Specific Shots</label><textarea name="shotList" defaultValue={initialData.shotList} className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-24" placeholder="Key moments..."></textarea></div>
           </div>
         )}
       </FormContainer>
