@@ -24,12 +24,13 @@ import {
   Eye, 
   CalendarPlus,
   Save,
-  LogOut 
+  LogOut,
+  Hash // Added Hash icon for ID
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { signInWithPopup, signOut } from 'firebase/auth';
-import emailjs from '@emailjs/browser'; // Import EmailJS
+import emailjs from '@emailjs/browser'; 
 
 import salpointeLogo from './SC-LOGO-RGB.png'; 
 
@@ -262,6 +263,10 @@ const App = () => {
           <User size={18} /> Contact Information
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-slate-600 mb-1">Project / Request Name</label>
+            <input name="requestName" type="text" defaultValue={initialData.requestName || ''} className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm" placeholder="e.g. Football Video, Catering for NHS" required />
+          </div>
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">Full Name</label>
             <input name="fullName" type="text" defaultValue={initialData.fullName || ''} className="w-full rounded-md border-slate-300 shadow-sm p-2.5 border focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm" placeholder="Jane Doe" required />
@@ -309,7 +314,8 @@ const App = () => {
 
                   return {
                       id: doc.id,
-                      title: data.title || "Request",
+                      title: data.title || data.requestName || "Request",
+                      displayId: data.displayId,
                       dept: data.dept,
                       type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event',
                       status: data.status,
@@ -350,7 +356,7 @@ const App = () => {
     const getGoogleCalendarUrl = (event) => {
       const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE";
       const text = `&text=${encodeURIComponent(`[${event.dept}] ${event.title}`)}`;
-      const details = `&details=${encodeURIComponent(`Requested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`;
+      const details = `&details=${encodeURIComponent(`Ref: ${event.displayId}\nRequested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`;
       const location = `&location=${encodeURIComponent(event.location || 'Salpointe Catholic High School')}`;
       
       const y = event.date.getFullYear();
@@ -437,7 +443,7 @@ const App = () => {
                         </div>
                         <div>
                           <p className="font-bold text-slate-800 text-sm">{event.title}</p>
-                          <p className="text-xs text-slate-500 uppercase tracking-wide">{event.dept} Dept • {event.fullName}</p>
+                          <p className="text-xs text-slate-500 uppercase tracking-wide">{event.dept} Dept • {event.displayId}</p>
                         </div>
                       </div>
                       
@@ -488,6 +494,10 @@ const App = () => {
     }, []);
 
     const handleStatusUpdate = async (req, newStatus) => {
+      if (!window.confirm(`Are you sure you want to mark this request as ${newStatus}?`)) {
+        return;
+      }
+
       const requestRef = doc(db, "requests", req.id);
       await updateDoc(requestRef, {
         status: newStatus
@@ -502,11 +512,11 @@ const App = () => {
       // Map to EmailJS template variables
       const templateParams = {
         to_name: req.fullName,
-        to_email: req.email, // Assuming this is captured in the form
-        subject: `Request Update: ${req.title}`,
+        to_email: req.email, 
+        subject: `Request Update: ${req.title} (${req.displayId || 'N/A'})`,
         title: req.title,
         status: newStatus,
-        message: `Your request status has been updated to: ${newStatus}. Please check the portal or contact the CTE department for more details.`
+        message: `Your request (${req.displayId || 'N/A'}) has been updated to: ${newStatus}. Please check the portal or contact the CTE department for more details.`
       };
       
       sendNotificationEmail(templateParams);
@@ -566,7 +576,10 @@ const App = () => {
               <div className="p-6 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
                 <div>
                   <h3 className="text-xl font-bold text-slate-800">Request Details</h3>
-                  <p className="text-xs text-slate-400 font-mono mt-1">ID: {selectedRequest.id}</p>
+                  <div className="flex gap-3 text-xs text-slate-400 font-mono mt-1">
+                    <span>ID: {selectedRequest.displayId || 'N/A'}</span>
+                    <span className="opacity-50">| Ref: {selectedRequest.id}</span>
+                  </div>
                 </div>
                 <button onClick={() => setSelectedRequest(null)} className="text-slate-400 hover:text-slate-600 transition-colors bg-slate-100 p-2 rounded-full">
                   <X size={20} />
@@ -608,7 +621,7 @@ const App = () => {
                     </h4>
                     <div className="bg-slate-50 rounded-lg p-4 space-y-4 border border-slate-100">
                       {Object.entries(selectedRequest).map(([key, value]) => {
-                        if(['id', 'dept', 'status', 'fullName', 'email', 'role', 'formattedDate', 'createdAt', 'title'].includes(key)) return null;
+                        if(['id', 'dept', 'status', 'fullName', 'email', 'role', 'formattedDate', 'createdAt', 'title', 'requestName', 'displayId'].includes(key)) return null;
                         
                         const label = key.replace(/([A-Z])/g, ' $1').trim();
                         
@@ -691,6 +704,7 @@ const App = () => {
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                  <th className="p-4">ID</th>
                   <th className="p-4">Department</th>
                   <th className="p-4">Request Details</th>
                   <th className="p-4">Requester</th>
@@ -703,9 +717,10 @@ const App = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredRequests.map((req) => (
                   <tr key={req.id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="p-4 text-slate-400 font-mono text-xs">{req.displayId || '...'}</td>
                     <td className="p-4 text-slate-700 font-medium text-sm capitalize">{req.dept}</td>
                     <td className="p-4 text-slate-800 font-semibold text-sm md:text-base">
-                      {req.title || req.eventName || req.projectType || "General Request"}
+                      {req.title || "General Request"}
                     </td>
                     <td className="p-4 text-slate-600 text-sm">{req.fullName}</td>
                     <td className="p-4 text-slate-500 text-sm">
@@ -784,22 +799,28 @@ const App = () => {
       }
       
       try {
+        // Generate Unique Readable ID
+        const timestampSuffix = Date.now().toString().slice(-4);
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        const displayId = `REQ-${timestampSuffix}-${randomNum}`;
+
         await addDoc(collection(db, "requests"), {
           ...data,
           dept: title,
+          displayId: displayId, // SAVE THE ID
           status: "Pending Review",
           createdAt: new Date(),
-          title: data.eventName || data.projectType || data.businessName || "New Request" 
+          title: data.requestName || data.eventName || data.projectType || data.businessName || "New Request" 
         });
         
         // SEND EMAIL NOTIFICATION TO ADMIN
         const templateParams = {
           to_name: "Admin",
-          to_email: "erivers@salpointe.org", // REPLACE with actual admin email
-          subject: `New Request from ${data.fullName}`,
-          title: data.eventName || data.projectType || "New Request",
+          to_email: "erivers@salpointe.org", 
+          subject: `New Request: ${data.requestName} (${displayId})`,
+          title: data.requestName || "New Request",
           status: "Pending Review",
-          message: `A new request has been submitted by ${data.fullName} for ${title}. \n\nDetails: ${data.details || data.brief || data.description || 'N/A'}`
+          message: `A new request (${displayId}) has been submitted by ${data.fullName} for ${title}. \n\nDetails: ${data.details || data.brief || data.description || 'N/A'}`
         };
         sendNotificationEmail(templateParams);
 
@@ -900,7 +921,7 @@ const App = () => {
           </div>
         ) : (
           <div className="space-y-4 animate-fade-in">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Name</label><input name="eventName" defaultValue={initialData.eventName} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Varsity Football" required /></div>
+            {/* Event Name is now handled by the main Request Name field */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input name="eventDate" defaultValue={initialData.eventDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label><input name="startTime" defaultValue={initialData.startTime} type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
@@ -938,7 +959,7 @@ const App = () => {
     return (
       <FormContainer title={title} icon={Briefcase} colorClass="bg-emerald-600" setSubmitted={setSubmitted} initialData={initialData}>
         <div className="space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Business Name</label><input name="businessName" defaultValue={initialData.businessName} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="Project Alpha" /></div>
+          {/* Business Name is now covered by Request Name */}
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Assistance Needed</label><select name="assistanceType" defaultValue={initialData.assistanceType} className="w-full rounded-md border-slate-300 border p-2.5 text-sm shadow-sm bg-white"><option>Business Plan Review</option><option>Financial Modeling Help</option><option>Marketing Strategy</option><option>General Mentorship</option></select></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Idea Description</label><textarea name="description" defaultValue={initialData.description} className="w-full rounded-md border-slate-300 border p-2.5 text-sm h-40" placeholder="Briefly describe your product..." required></textarea></div>
         </div>
@@ -953,7 +974,7 @@ const App = () => {
     return (
       <FormContainer title={title} icon={Utensils} colorClass="bg-orange-500" setSubmitted={setSubmitted} initialData={initialData}>
         <div className="space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Name</label><input name="eventName" defaultValue={initialData.eventName} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Faculty Luncheon" required /></div>
+          {/* Event Name covered by Request Name */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Date</label><input name="eventDate" defaultValue={initialData.eventDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Serve Time</label><input name="serveTime" defaultValue={initialData.serveTime} type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
@@ -1010,7 +1031,7 @@ const App = () => {
           </div>
         ) : (
           <div className="space-y-4 animate-fade-in">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Event Name</label><input name="eventName" defaultValue={initialData.eventName} type="text" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" placeholder="e.g., Homecoming" required /></div>
+            {/* Event Name covered by Request Name */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input name="eventDate" defaultValue={initialData.eventDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label><input name="startTime" defaultValue={initialData.startTime} type="time" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
