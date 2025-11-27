@@ -26,11 +26,27 @@ import {
   Save,
   LogOut 
 } from 'lucide-react';
-import { db, auth, googleProvider } from './firebase-config'; // Import auth
+import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { signInWithPopup, signOut } from 'firebase/auth';
+import emailjs from '@emailjs/browser'; // Import EmailJS
 
 import salpointeLogo from './SC-LOGO-RGB.png'; 
+
+// *** CONFIGURATION SECTION ***
+const EMAILJS_CONFIG = {
+  SERVICE_ID: "service_dp1gjh1",   // e.g. "service_xyz"
+  TEMPLATE_ID: "template_kyo4h1e", // e.g. "template_abc"
+  PUBLIC_KEY: "MWZVa3mvq5KN6_5GZ"    // e.g. "user_123"
+};
+
+const ALLOWED_ADMINS = [
+    "krashka@salpointe.org", 
+    "jelias@salpointe.org",
+    "cneff@salpointe.org",
+    "vdunk@salpointe.org",
+    "erivers@salpointe.org" 
+];
 
 const Departments = {
   FILM: 'film',
@@ -44,6 +60,25 @@ const Departments = {
 
 const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
 
+// Helper to send emails
+const sendNotificationEmail = (templateParams) => {
+  if (EMAILJS_CONFIG.SERVICE_ID === "YOUR_SERVICE_ID_HERE") {
+    console.warn("EmailJS not configured yet. Skipping email.");
+    return;
+  }
+
+  emailjs.send(
+    EMAILJS_CONFIG.SERVICE_ID,
+    EMAILJS_CONFIG.TEMPLATE_ID,
+    templateParams,
+    EMAILJS_CONFIG.PUBLIC_KEY
+  ).then((response) => {
+    console.log('EMAIL SUCCESS!', response.status, response.text);
+  }, (err) => {
+    console.log('EMAIL FAILED...', err);
+  });
+};
+
 const App = () => {
   const [currentView, setCurrentView] = useState('home');
   const [submitted, setSubmitted] = useState(false);
@@ -51,16 +86,6 @@ const App = () => {
   // --- AUTH STATE ---
   const [adminUser, setAdminUser] = useState(null);
   const [adminMode, setAdminMode] = useState(false);
-
-  // *** SECURITY CONFIGURATION ***
-  // Add all email addresses that should have Admin access here
-  const ALLOWED_ADMINS = [
-    "krashka@salpointe.org", 
-    "jelias@salpointe.org",
-    "cneff@salpointe.org",
-    "vdunk@salpointe.org",
-    "erivers@salpointe.org" 
-  ];
 
   // Reset function to go back home
   const goHome = () => {
@@ -153,7 +178,7 @@ const App = () => {
         </div>
         <h2 className="text-xl md:text-2xl font-bold text-slate-800 mb-2">Request Received!</h2>
         <p className="text-slate-600 mb-8 text-sm md:text-base">
-          Your request has been saved to the database. You can track its status in the Queue.
+          Your request has been saved to the database and the department head has been notified.
         </p>
         <button 
           onClick={onReset}
@@ -462,14 +487,29 @@ const App = () => {
       return () => unsubscribe();
     }, []);
 
-    const handleStatusUpdate = async (id, newStatus) => {
-      const requestRef = doc(db, "requests", id);
+    const handleStatusUpdate = async (req, newStatus) => {
+      const requestRef = doc(db, "requests", req.id);
       await updateDoc(requestRef, {
         status: newStatus
       });
-      if (selectedRequest && selectedRequest.id === id) {
+      
+      // Update selectedRequest if open
+      if (selectedRequest && selectedRequest.id === req.id) {
           setSelectedRequest(prev => ({...prev, status: newStatus}));
       }
+
+      // SEND EMAIL NOTIFICATION
+      // Map to EmailJS template variables
+      const templateParams = {
+        to_name: req.fullName,
+        to_email: req.email, // Assuming this is captured in the form
+        subject: `Request Update: ${req.title}`,
+        title: req.title,
+        status: newStatus,
+        message: `Your request status has been updated to: ${newStatus}. Please check the portal or contact the CTE department for more details.`
+      };
+      
+      sendNotificationEmail(templateParams);
     };
 
     const handleDelete = async (id) => {
@@ -596,9 +636,9 @@ const App = () => {
                      <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
                          <h4 className="font-bold text-indigo-900 mb-2 text-sm">Admin Actions</h4>
                          <div className="flex gap-3">
-                            <button onClick={() => handleStatusUpdate(selectedRequest.id, 'Approved')} className="flex-1 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium text-sm">Approve</button>
-                            <button onClick={() => handleStatusUpdate(selectedRequest.id, 'Denied')} className="flex-1 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-medium text-sm">Deny</button>
-                            <button onClick={() => handleStatusUpdate(selectedRequest.id, 'Completed')} className="flex-1 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 font-medium text-sm">Mark Complete</button>
+                            <button onClick={() => handleStatusUpdate(selectedRequest, 'Approved')} className="flex-1 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium text-sm">Approve</button>
+                            <button onClick={() => handleStatusUpdate(selectedRequest, 'Denied')} className="flex-1 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-medium text-sm">Deny</button>
+                            <button onClick={() => handleStatusUpdate(selectedRequest, 'Completed')} className="flex-1 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 font-medium text-sm">Mark Complete</button>
                          </div>
                      </div>
                  )}
@@ -685,8 +725,8 @@ const App = () => {
                     </td>
                     {adminMode && (
                       <td className="p-4 flex gap-2">
-                        <button onClick={() => handleStatusUpdate(req.id, 'Approved')} className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200" title="Approve"><Check size={16}/></button>
-                        <button onClick={() => handleStatusUpdate(req.id, 'Denied')} className="p-1 bg-red-100 text-red-700 rounded hover:bg-red-200" title="Deny"><X size={16}/></button>
+                        <button onClick={() => handleStatusUpdate(req, 'Approved')} className="p-1 bg-green-100 text-green-700 rounded hover:bg-green-200" title="Approve"><Check size={16}/></button>
+                        <button onClick={() => handleStatusUpdate(req, 'Denied')} className="p-1 bg-red-100 text-red-700 rounded hover:bg-red-200" title="Deny"><X size={16}/></button>
                         <button onClick={() => handleDelete(req.id)} className="p-1 bg-slate-100 text-slate-700 rounded hover:bg-slate-200" title="Delete"><span className="font-mono text-xs font-bold px-1">DEL</span></button>
                       </td>
                     )}
@@ -752,6 +792,17 @@ const App = () => {
           title: data.eventName || data.projectType || data.businessName || "New Request" 
         });
         
+        // SEND EMAIL NOTIFICATION TO ADMIN
+        const templateParams = {
+          to_name: "Admin",
+          to_email: "erivers@salpointe.org", // REPLACE with actual admin email
+          subject: `New Request from ${data.fullName}`,
+          title: data.eventName || data.projectType || "New Request",
+          status: "Pending Review",
+          message: `A new request has been submitted by ${data.fullName} for ${title}. \n\nDetails: ${data.details || data.brief || data.description || 'N/A'}`
+        };
+        sendNotificationEmail(templateParams);
+
         localStorage.removeItem(draftKey);
         setSubmitted(true);
       } catch (error) {
