@@ -1,5 +1,6 @@
 {
-  "name": "salpointe-cte-hub", "homepage": "https://mannierivers.github.io/salpointe-cte-hub",
+  "name": "salpointe-cte-hub",
+  "homepage": "https://mannierivers.github.io/salpointe-cte-hub",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,6 +13,7 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "firebase": "^12.6.0",
     "lucide-react": "^0.555.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
