@@ -21,7 +21,8 @@ import {
   Unlock,
   Check,
   X,
-  Eye // Added Eye icon for viewing details
+  Eye, 
+  CalendarPlus // Added CalendarPlus icon
 } from 'lucide-react';
 import { db } from './firebase-config'; // Import database connection
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -237,22 +238,43 @@ const App = () => {
     const today = new Date();
     const [selectedDate, setSelectedDate] = useState(null);
     const [filter, setFilter] = useState('all');
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    const generateEvents = () => {
-      const events = [];
-      events.push({ id: 1, title: 'Varsity Football vs. Walden Grove', dept: Departments.FILM, type: 'event', offset: 2 });
-      events.push({ id: 2, title: 'Homecoming Assembly Photos', dept: Departments.PHOTO, type: 'event', offset: 5 });
-      events.push({ id: 3, title: 'Faculty Luncheon Catering', dept: Departments.CULINARY, type: 'event', offset: 7 });
-      events.push({ id: 4, title: 'Cinema Camera Kit #1', dept: Departments.FILM, type: 'checkout', offset: 1 });
-      events.push({ id: 5, title: 'Canon DSLR Kit A', dept: Departments.PHOTO, type: 'checkout', offset: 3 });
-      events.push({ id: 6, title: 'DJI Drone (M. Johnson)', dept: Departments.FILM, type: 'checkout', offset: 0 });
-      return events.map(e => {
-        const d = new Date();
-        d.setDate(today.getDate() + e.offset);
-        return { ...e, date: d };
+    useEffect(() => {
+      const q = query(collection(db, "requests")); 
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+          const fetchedEvents = snapshot.docs
+              .map(doc => {
+                  const data = doc.data();
+                  // Determine which date field to use based on request type
+                  let dateStr = data.eventDate || data.checkoutDate || data.pickupDate || data.deadline;
+                  if (!dateStr) return null; 
+
+                  // Create date object ensuring timezone issues don't shift the day
+                  const [y, m, d] = dateStr.split('-').map(Number);
+                  const dateObj = new Date(y, m - 1, d);
+
+                  return {
+                      id: doc.id,
+                      title: data.title || "Request",
+                      dept: data.dept,
+                      type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event',
+                      status: data.status,
+                      date: dateObj,
+                      // Keep original data for GCal link generation
+                      ...data
+                  };
+              })
+              .filter(e => e !== null && e.status === 'Approved'); // ONLY SHOW APPROVED
+          
+          setEvents(fetchedEvents);
+          setLoading(false);
       });
-    };
-    const events = generateEvents();
+      return () => unsubscribe();
+    }, []);
+
     const getDaysInMonth = (date) => {
       const year = date.getFullYear();
       const month = date.getMonth();
@@ -260,15 +282,44 @@ const App = () => {
       const firstDay = new Date(year, month, 1).getDay();
       return { days, firstDay, monthName: date.toLocaleString('default', { month: 'long' }), year };
     };
+
     const { days, firstDay, monthName, year } = getDaysInMonth(today);
     const daysArray = Array.from({ length: days }, (_, i) => i + 1);
     const empties = Array.from({ length: firstDay }, (_, i) => i);
+
     const getEventsForDay = (dayNum) => {
       return events.filter(e => {
         return e.date.getDate() === dayNum && 
                e.date.getMonth() === today.getMonth() &&
                (filter === 'all' || e.dept === filter);
       });
+    };
+
+    // Generate Google Calendar Link
+    const getGoogleCalendarUrl = (event) => {
+      const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE";
+      const text = `&text=${encodeURIComponent(`[${event.dept}] ${event.title}`)}`;
+      const details = `&details=${encodeURIComponent(`Requested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`;
+      const location = `&location=${encodeURIComponent(event.location || 'Salpointe Catholic High School')}`;
+      
+      // Format Dates for GCal (YYYYMMDD)
+      // Note: We are doing All Day events for simplicity to avoid timezone math complexity
+      const y = event.date.getFullYear();
+      const m = String(event.date.getMonth() + 1).padStart(2, '0');
+      const d = String(event.date.getDate()).padStart(2, '0');
+      const dateString = `${y}${m}${d}`;
+      
+      // For all day events, start date is YYYYMMDD and end date is YYYYMMDD + 1 day
+      const nextDay = new Date(event.date);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const ny = nextDay.getFullYear();
+      const nm = String(nextDay.getMonth() + 1).padStart(2, '0');
+      const nd = String(nextDay.getDate()).padStart(2, '0');
+      const nextDateString = `${ny}${nm}${nd}`;
+
+      const dates = `&dates=${dateString}/${nextDateString}`; // All day event format
+
+      return `${baseUrl}${text}${dates}${details}${location}`;
     };
 
     return (
@@ -279,36 +330,87 @@ const App = () => {
             <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2">
               <Calendar className="text-amber-400" size={24} /> Master Schedule
             </h2>
-            <p className="text-red-200 text-sm">View availability and upcoming events</p>
+            <p className="text-red-200 text-sm">Approved requests and checkouts</p>
           </div>
           <div className="flex bg-red-800 rounded-lg p-1 w-full md:w-auto overflow-x-auto">
-             {/* Filter buttons simplified for brevity */}
-            <span className="text-xs text-red-200 px-2 self-center">Static Preview</span>
+            <button onClick={() => setFilter('all')} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap ${filter === 'all' ? 'bg-white text-red-900 shadow-sm' : 'text-red-200 hover:text-white'}`}>All</button>
+            <button onClick={() => setFilter(Departments.FILM)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap ${filter === Departments.FILM ? 'bg-white text-red-900 shadow-sm' : 'text-red-200 hover:text-white'}`}>Film</button>
+            <button onClick={() => setFilter(Departments.PHOTO)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap ${filter === Departments.PHOTO ? 'bg-white text-red-900 shadow-sm' : 'text-red-200 hover:text-white'}`}>Photo</button>
+            <button onClick={() => setFilter(Departments.CULINARY)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap ${filter === Departments.CULINARY ? 'bg-white text-red-900 shadow-sm' : 'text-red-200 hover:text-white'}`}>Culinary</button>
           </div>
         </div>
+
         <div className="p-4 md:p-6">
            <div className="overflow-x-auto pb-2">
-            <div className="min-w-[600px] md:min-w-0 grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="bg-slate-50 p-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>
-              ))}
-              {empties.map(i => <div key={`empty-${i}`} className="bg-white min-h-[80px] md:min-h-[100px]" />)}
-              {daysArray.map(day => {
-                const dayEvents = getEventsForDay(day);
-                const isToday = day === today.getDate();
-                return (
-                  <div key={day} className={`bg-white min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-100 relative group cursor-pointer ${selectedDate === day ? 'bg-yellow-50' : ''}`} onClick={() => setSelectedDate(day === selectedDate ? null : day)}>
-                    <span className={`text-xs md:text-sm font-medium inline-block w-6 h-6 md:w-7 md:h-7 leading-6 md:leading-7 text-center rounded-full mb-1 ${isToday ? 'bg-red-900 text-white' : 'text-slate-700'}`}>{day}</span>
-                    <div className="space-y-1">
-                      {dayEvents.map(event => (
-                        <div key={event.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${event.type === 'checkout' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}>{event.title}</div>
-                      ))}
+            {loading ? <div className="text-center py-8 text-slate-400">Loading schedule...</div> : (
+              <div className="min-w-[600px] md:min-w-0 grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} className="bg-slate-50 p-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>
+                ))}
+                {empties.map(i => <div key={`empty-${i}`} className="bg-white min-h-[80px] md:min-h-[100px]" />)}
+                {daysArray.map(day => {
+                  const dayEvents = getEventsForDay(day);
+                  const isToday = day === today.getDate();
+                  const isSelected = selectedDate === day;
+                  
+                  return (
+                    <div 
+                      key={day} 
+                      className={`bg-white min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-100 relative group cursor-pointer transition-colors ${isSelected ? 'bg-red-50' : 'hover:bg-slate-50'}`} 
+                      onClick={() => setSelectedDate(isSelected ? null : day)}
+                    >
+                      <span className={`text-xs md:text-sm font-medium inline-block w-6 h-6 md:w-7 md:h-7 leading-6 md:leading-7 text-center rounded-full mb-1 ${isToday ? 'bg-red-900 text-white' : 'text-slate-700'}`}>{day}</span>
+                      <div className="space-y-1">
+                        {dayEvents.map(event => (
+                          <div key={event.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${event.type === 'checkout' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'}`}>
+                            {event.title}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+          
+          {/* Detailed Daily View with Google Calendar Button */}
+          {selectedDate && (
+            <div className="mt-4 md:mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200 animate-fade-in">
+              <h4 className="font-bold text-slate-800 mb-3">Events for {monthName} {selectedDate}</h4>
+              {getEventsForDay(selectedDate).length === 0 ? (
+                <p className="text-slate-500 text-sm">No approved events for this day.</p>
+              ) : (
+                <div className="space-y-3">
+                  {getEventsForDay(selectedDate).map(event => (
+                    <div key={event.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded border border-slate-200 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-1 p-2 rounded-full flex-shrink-0 ${event.type === 'checkout' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                          {event.type === 'checkout' ? <Box size={14} /> : <Calendar size={14} />}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">{event.title}</p>
+                          <p className="text-xs text-slate-500 uppercase tracking-wide">{event.dept} Dept • {event.fullName}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Google Calendar Button */}
+                      <a 
+                        href={getGoogleCalendarUrl(event)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-medium px-3 py-2 rounded-lg transition-colors"
+                      >
+                        <CalendarPlus size={14} />
+                        <span className="hidden sm:inline">Add to Google Calendar</span>
+                        <span className="sm:hidden">Add</span>
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
