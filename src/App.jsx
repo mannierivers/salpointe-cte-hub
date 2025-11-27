@@ -25,10 +25,11 @@ import {
   CalendarPlus,
   Save,
   LogOut,
-  Hash // Added Hash icon for ID
+  Hash,
+  AlertCircle // Added AlertCircle for inventory warnings
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
-import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where } from 'firebase/firestore'; // Added getDocs, where
 import { signInWithPopup, signOut } from 'firebase/auth';
 import emailjs from '@emailjs/browser'; 
 
@@ -48,6 +49,23 @@ const ALLOWED_ADMINS = [
     "vdunk@salpointe.org",
     "erivers@salpointe.org" 
 ];
+
+// *** MASTER INVENTORY LIMITS ***
+// Define exactly how many of each item you own here.
+const INVENTORY_LIMITS = {
+  'Cinema Camera Kit *': 1,       // <--- Change this number
+  'Gimbal / Stabilizer *': 6,
+  'DJI Mic Kit (Wireless)': 4,
+  'DJI Flip Drone *': 1,
+  'Tripod': 4,                    // Shared pool for both departments
+  'Lighting Kit': 6,
+  'DSLR Camera Body': 6,
+  'Zoom Lens (18-55mm)': 6,
+  'Telephoto Lens (70-200mm)': 2,
+  'Portrait Lens (50mm)': 3,
+  'SD Card Reader': 5,
+  'Flash Unit': 3
+};
 
 const Departments = {
   FILM: 'film',
@@ -291,6 +309,7 @@ const App = () => {
   // --- Calendar Component ---
 
   function CalendarView() {
+    // ... existing Calendar code ...
     const today = new Date();
     const [selectedDate, setSelectedDate] = useState(null);
     const [filter, setFilter] = useState('all');
@@ -471,6 +490,7 @@ const App = () => {
   // --- Real-Time Request Queue Component ---
 
   function RequestQueueView({ adminMode, setAdminMode, setAdminUser, ALLOWED_ADMINS }) {
+    // ... existing Queue code ...
     const [requests, setRequests] = useState([]);
     const [filter, setFilter] = useState('all');
     const [loading, setLoading] = useState(true);
@@ -509,7 +529,6 @@ const App = () => {
       }
 
       // SEND EMAIL NOTIFICATION
-      // Map to EmailJS template variables
       const templateParams = {
         to_name: req.fullName,
         to_email: req.email, 
@@ -875,6 +894,75 @@ const App = () => {
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     const [requestType, setRequestType] = useState(initialData.requestType || 'checkout'); 
+    
+    // Inventory Availability State
+    const [availableStock, setAvailableStock] = useState({});
+    const [datesSelected, setDatesSelected] = useState(false);
+    const [dateRange, setDateRange] = useState({ start: initialData.checkoutDate || '', end: initialData.returnDate || '' });
+
+    // Handle date changes
+    const handleDateChange = (e) => {
+        const newDates = { ...dateRange, [e.target.name === 'checkoutDate' ? 'start' : 'end']: e.target.value };
+        setDateRange(newDates);
+    };
+
+    // Calculate Availability Effect
+    useEffect(() => {
+        const calculateAvailability = async () => {
+            if (!dateRange.start || !dateRange.end || requestType !== 'checkout') {
+                setDatesSelected(false);
+                return;
+            }
+            setDatesSelected(true);
+
+            // Fetch Approved/Pending requests overlapping with these dates
+            // Query logic: 
+            // Existing Request (R) overlaps if: (R.start <= User.end) AND (R.end >= User.start)
+            // Note: Simple string comparison works for ISO dates (YYYY-MM-DD)
+            
+            const q = query(
+                collection(db, "requests"), 
+                where("dept", "==", "Film"),
+                where("requestType", "==", "checkout") // Only care about checkouts
+            );
+            
+            const querySnapshot = await getDocs(q);
+            const usageCounts = {};
+
+            querySnapshot.forEach(doc => {
+                const data = doc.data();
+                // Filter status
+                if (data.status === 'Denied' || data.status === 'Completed') return;
+
+                // Check Overlap
+                const reqStart = data.checkoutDate;
+                const reqEnd = data.returnDate;
+                
+                if (reqStart <= dateRange.end && reqEnd >= dateRange.start) {
+                    // Overlap found! Count equipment.
+                    if (data.equipment) {
+                        const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment];
+                        items.forEach(item => {
+                            usageCounts[item] = (usageCounts[item] || 0) + 1;
+                        });
+                    }
+                }
+            });
+
+            // Calculate remaining
+            const stockStatus = {};
+            Object.keys(INVENTORY_LIMITS).forEach(item => {
+                const total = INVENTORY_LIMITS[item];
+                const used = usageCounts[item] || 0;
+                stockStatus[item] = Math.max(0, total - used);
+            });
+            
+            setAvailableStock(stockStatus);
+        };
+
+        calculateAvailability();
+    }, [dateRange, requestType]);
+
 
     return (
       <FormContainer title={title} icon={Video} colorClass="bg-blue-600" setSubmitted={setSubmitted} initialData={initialData}>
@@ -893,21 +981,49 @@ const App = () => {
         {requestType === 'checkout' ? (
           <div className="space-y-4 animate-fade-in">
              <div className="bg-blue-50 p-4 rounded-md border border-blue-100 text-sm text-blue-800 mb-4"><strong>Note:</strong> Equipment must be returned by 8:00 AM the following school day.</div>
+             
+             {/* Dates Moved Up for Inventory Logic */}
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Checkout Date</label><input name="checkoutDate" defaultValue={initialData.checkoutDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+             </div>
+
              <label className="block text-sm font-medium text-slate-700">
                Select Equipment Needed: <span className="text-red-500 text-xs font-normal ml-1">* Requires Training</span>
              </label>
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-               {['Cinema Camera Kit *', 'Gimbal / Stabilizer *', 'DJI Mic Kit (Wireless)', 'DJI Flip Drone *', 'Tripod', 'Lighting Kit'].map((item) => (
-                 <label key={item} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors active:bg-blue-50">
-                   <input type="checkbox" name="equipment" value={item} defaultChecked={initialData.equipment?.includes(item)} className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" />
-                   <span className="text-slate-700 text-sm">{item}</span>
-                 </label>
-               ))}
-             </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Checkout Date</label><input name="checkoutDate" defaultValue={initialData.checkoutDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-             </div>
+             
+             {!datesSelected ? (
+                 <div className="p-4 bg-slate-100 rounded text-center text-slate-500 text-sm">
+                     <AlertCircle className="inline-block mr-2 w-4 h-4 mb-1"/>
+                     Please select dates above to check equipment availability.
+                 </div>
+             ) : (
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                   {['Cinema Camera Kit *', 'Gimbal / Stabilizer *', 'DJI Mic Kit (Wireless)', 'DJI Flip Drone *', 'Tripod', 'Lighting Kit'].map((item) => {
+                     const remaining = availableStock[item] !== undefined ? availableStock[item] : 99; // Default if not in list
+                     const isSoldOut = remaining <= 0;
+                     
+                     return (
+                        <label key={item} className={`flex items-center space-x-3 p-3 border rounded-lg transition-colors ${isSoldOut ? 'bg-gray-100 opacity-60 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer active:bg-blue-50'}`}>
+                        <input 
+                            type="checkbox" 
+                            name="equipment" 
+                            value={item} 
+                            disabled={isSoldOut}
+                            defaultChecked={initialData.equipment?.includes(item)} 
+                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" 
+                        />
+                        <div className="flex-1">
+                            <span className="text-slate-700 text-sm block">{item}</span>
+                            <span className={`text-xs ${isSoldOut ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                                {isSoldOut ? 'Unavailable for dates' : `${remaining} available`}
+                            </span>
+                        </div>
+                        </label>
+                     );
+                   })}
+                 </div>
+             )}
 
              {/* Terms & Conditions */}
              <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
@@ -992,6 +1108,64 @@ const App = () => {
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     const [requestType, setRequestType] = useState(initialData.requestType || 'service'); 
+    
+    // Inventory Availability State for Photo
+    const [availableStock, setAvailableStock] = useState({});
+    const [datesSelected, setDatesSelected] = useState(false);
+    const [dateRange, setDateRange] = useState({ start: initialData.pickupDate || '', end: initialData.returnDate || '' });
+
+    const handleDateChange = (e) => {
+        const newDates = { ...dateRange, [e.target.name === 'pickupDate' ? 'start' : 'end']: e.target.value };
+        setDateRange(newDates);
+    };
+
+    useEffect(() => {
+        const calculateAvailability = async () => {
+            if (!dateRange.start || !dateRange.end || requestType !== 'checkout') {
+                setDatesSelected(false);
+                return;
+            }
+            setDatesSelected(true);
+
+            const q = query(
+                collection(db, "requests"), 
+                where("dept", "==", "Photo"),
+                where("requestType", "==", "checkout") 
+            );
+            
+            const querySnapshot = await getDocs(q);
+            const usageCounts = {};
+
+            querySnapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.status === 'Denied' || data.status === 'Completed') return;
+
+                const reqStart = data.pickupDate; // Note: Photo uses 'pickupDate'
+                const reqEnd = data.returnDate;
+                
+                if (reqStart <= dateRange.end && reqEnd >= dateRange.start) {
+                    if (data.equipment) {
+                        const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment];
+                        items.forEach(item => {
+                            usageCounts[item] = (usageCounts[item] || 0) + 1;
+                        });
+                    }
+                }
+            });
+
+            const stockStatus = {};
+            Object.keys(INVENTORY_LIMITS).forEach(item => {
+                const total = INVENTORY_LIMITS[item];
+                const used = usageCounts[item] || 0;
+                stockStatus[item] = Math.max(0, total - used);
+            });
+            
+            setAvailableStock(stockStatus);
+        };
+
+        calculateAvailability();
+    }, [dateRange, requestType]);
+
     return (
       <FormContainer title={title} icon={Camera} colorClass="bg-pink-600" setSubmitted={setSubmitted} initialData={initialData}>
         <input type="hidden" name="requestType" value={requestType} />
@@ -1005,19 +1179,47 @@ const App = () => {
         {requestType === 'checkout' ? (
           <div className="space-y-4 animate-fade-in">
              <div className="bg-pink-50 p-4 rounded-md border border-pink-100 text-sm text-pink-800 mb-4"><strong>Requirement:</strong> Photo I completion required.</div>
+             
+             {/* Dates Moved Up */}
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Pickup Date</label><input name="pickupDate" defaultValue={initialData.pickupDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+               <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
+             </div>
+
              <label className="block text-sm font-medium text-slate-700">Select Equipment Needed:</label>
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-               {['DSLR Camera Body', 'Zoom Lens (18-55mm)', 'Telephoto Lens (70-200mm)', 'Portrait Lens (50mm)', 'SD Card Reader', 'Tripod', 'Flash Unit'].map((item) => (
-                 <label key={item} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer active:bg-pink-50">
-                   <input type="checkbox" name="equipment" value={item} defaultChecked={initialData.equipment?.includes(item)} className="w-5 h-5 text-pink-600 rounded focus:ring-pink-500" />
-                   <span className="text-slate-700 text-sm">{item}</span>
-                 </label>
-               ))}
-             </div>
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Pickup Date</label><input name="pickupDate" defaultValue={initialData.pickupDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-               <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
-             </div>
+             
+             {!datesSelected ? (
+                 <div className="p-4 bg-slate-100 rounded text-center text-slate-500 text-sm">
+                     <AlertCircle className="inline-block mr-2 w-4 h-4 mb-1"/>
+                     Please select dates above to check equipment availability.
+                 </div>
+             ) : (
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                   {['DSLR Camera Body', 'Zoom Lens (18-55mm)', 'Telephoto Lens (70-200mm)', 'Portrait Lens (50mm)', 'SD Card Reader', 'Tripod', 'Flash Unit'].map((item) => {
+                     const remaining = availableStock[item] !== undefined ? availableStock[item] : 99; 
+                     const isSoldOut = remaining <= 0;
+                     
+                     return (
+                        <label key={item} className={`flex items-center space-x-3 p-3 border rounded-lg transition-colors ${isSoldOut ? 'bg-gray-100 opacity-60 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer active:bg-pink-50'}`}>
+                        <input 
+                            type="checkbox" 
+                            name="equipment" 
+                            value={item} 
+                            disabled={isSoldOut}
+                            defaultChecked={initialData.equipment?.includes(item)} 
+                            className="w-5 h-5 text-pink-600 rounded focus:ring-pink-500" 
+                        />
+                        <div className="flex-1">
+                            <span className="text-slate-700 text-sm block">{item}</span>
+                            <span className={`text-xs ${isSoldOut ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                                {isSoldOut ? 'Unavailable for dates' : `${remaining} available`}
+                            </span>
+                        </div>
+                        </label>
+                     );
+                   })}
+                 </div>
+             )}
 
              {/* Terms & Conditions for Photo */}
              <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
