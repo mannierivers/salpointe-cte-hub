@@ -505,7 +505,7 @@ const App = () => {
                         </div>
                         <div>
                           <p className="font-bold text-slate-800 text-sm">{event.title}</p>
-                          <p className="text-xs text-slate-500 uppercase tracking-wide">{event.dept} Dept • {event.displayId}</p>
+                          <p className="text-xs text-slate-500 uppercase tracking-wide">{event.dept} Dept • {event.fullName}</p>
                         </div>
                       </div>
                       
@@ -1086,6 +1086,8 @@ const App = () => {
         calculateAvailability();
     }, [dateRange, requestType]);
 
+    // Single Day check
+    const isSingleDay = dateRange.start && dateRange.end && dateRange.start === dateRange.end;
 
     return (
       <FormContainer title={title} icon={Video} colorClass="bg-blue-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel}>
@@ -1110,6 +1112,23 @@ const App = () => {
                <div><label className="block text-sm font-medium text-slate-700 mb-1">Checkout Date</label><input name="checkoutDate" defaultValue={initialData.checkoutDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
                <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
              </div>
+
+             {/* Single Day Hours Selection */}
+             {isSingleDay && (
+                <div className="mb-4 animate-fade-in bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <label className="block text-sm font-bold text-blue-800 mb-1">Duration / Specific Hours</label>
+                    <p className="text-xs text-blue-600 mb-2">Since this is a single-day checkout, please specify how long you need it.</p>
+                    <select name="durationHours" defaultValue={initialData.durationHours} className="w-full rounded-md border-blue-300 border p-2.5 text-sm bg-white">
+                        <option value="">Select Duration...</option>
+                        <option value="1 Hour">1 Hour</option>
+                        <option value="2 Hours">2 Hours</option>
+                        <option value="3 Hours">3 Hours</option>
+                        <option value="4 Hours">4 Hours</option>
+                        <option value="Full Day (School Hours)">Full Day (School Hours)</option>
+                        <option value="Overnight">Overnight</option>
+                    </select>
+                </div>
+             )}
 
              <label className="block text-sm font-medium text-slate-700">
                Select Equipment Needed: <span className="text-red-500 text-xs font-normal ml-1">* Requires Training</span>
@@ -1289,6 +1308,9 @@ const App = () => {
         calculateAvailability();
     }, [dateRange, requestType]);
 
+    // Single Day check for Photo
+    const isSingleDay = dateRange.start && dateRange.end && dateRange.start === dateRange.end;
+
     return (
       <FormContainer title={title} icon={Camera} colorClass="bg-pink-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel}>
         <input type="hidden" name="requestType" value={requestType} />
@@ -1308,6 +1330,23 @@ const App = () => {
                <div><label className="block text-sm font-medium text-slate-700 mb-1">Pickup Date</label><input name="pickupDate" defaultValue={initialData.pickupDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
                <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} onChange={handleDateChange} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
              </div>
+
+             {/* Single Day Hours Selection for Photo */}
+             {isSingleDay && (
+                <div className="mb-4 animate-fade-in bg-pink-50 p-4 rounded-lg border border-pink-100">
+                    <label className="block text-sm font-bold text-pink-800 mb-1">Duration / Specific Hours</label>
+                    <p className="text-xs text-pink-600 mb-2">Since this is a single-day checkout, please specify how long you need it.</p>
+                    <select name="durationHours" defaultValue={initialData.durationHours} className="w-full rounded-md border-pink-300 border p-2.5 text-sm bg-white">
+                        <option value="">Select Duration...</option>
+                        <option value="1 Hour">1 Hour</option>
+                        <option value="2 Hours">2 Hours</option>
+                        <option value="3 Hours">3 Hours</option>
+                        <option value="4 Hours">4 Hours</option>
+                        <option value="Full Day (School Hours)">Full Day (School Hours)</option>
+                        <option value="Overnight">Overnight</option>
+                    </select>
+                </div>
+             )}
 
              <label className="block text-sm font-medium text-slate-700">Select Equipment Needed:</label>
              
