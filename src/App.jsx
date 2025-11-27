@@ -35,9 +35,9 @@ import salpointeLogo from './SC-LOGO-RGB.png';
 
 // *** CONFIGURATION SECTION ***
 const EMAILJS_CONFIG = {
-  SERVICE_ID: "service_dp1gjh1",   // e.g. "service_xyz"
-  TEMPLATE_ID: "template_kyo4h1e", // e.g. "template_abc"
-  PUBLIC_KEY: "MWZVa3mvq5KN6_5GZ"    // e.g. "user_123"
+  SERVICE_ID: "service_dp1gjh1",   
+  TEMPLATE_ID: "template_kyo4h1e", 
+  PUBLIC_KEY: "CZo6tBrAGwmjLwTr6"    
 };
 
 const ALLOWED_ADMINS = [
