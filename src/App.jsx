@@ -23,10 +23,12 @@ import {
   X,
   Eye, 
   CalendarPlus,
-  Save // Added Save icon
+  Save,
+  LogOut 
 } from 'lucide-react';
-import { db } from './firebase-config'; // Import database connection
+import { db, auth, googleProvider } from './firebase-config'; // Import auth
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { signInWithPopup, signOut } from 'firebase/auth';
 
 import salpointeLogo from './SC-LOGO-RGB.png'; 
 
@@ -45,6 +47,20 @@ const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
 const App = () => {
   const [currentView, setCurrentView] = useState('home');
   const [submitted, setSubmitted] = useState(false);
+  
+  // --- AUTH STATE ---
+  const [adminUser, setAdminUser] = useState(null);
+  const [adminMode, setAdminMode] = useState(false);
+
+  // *** SECURITY CONFIGURATION ***
+  // Add all email addresses that should have Admin access here
+  const ALLOWED_ADMINS = [
+    "krashka@salpointe.org", 
+    "jelias@salpointe.org",
+    "cneff@salpointe.org",
+    "vdunk@salpointe.org",
+    "erivers@salpointe.org" 
+  ];
 
   // Reset function to go back home
   const goHome = () => {
@@ -108,7 +124,14 @@ const App = () => {
             {currentView === Departments.CULINARY && <CulinaryForm setSubmitted={setSubmitted} />}
             {currentView === Departments.PHOTO && <PhotoForm setSubmitted={setSubmitted} />}
             {currentView === Departments.CALENDAR && <CalendarView />}
-            {currentView === Departments.QUEUE && <RequestQueueView />}
+            {currentView === Departments.QUEUE && (
+                <RequestQueueView 
+                    adminMode={adminMode} 
+                    setAdminMode={setAdminMode} 
+                    setAdminUser={setAdminUser}
+                    ALLOWED_ADMINS={ALLOWED_ADMINS}
+                />
+            )}
           </>
         )}
       </main>
@@ -393,7 +416,6 @@ const App = () => {
                         </div>
                       </div>
                       
-                      {/* Google Calendar Button */}
                       <a 
                         href={getGoogleCalendarUrl(event)}
                         target="_blank"
@@ -417,11 +439,10 @@ const App = () => {
 
   // --- Real-Time Request Queue Component ---
 
-  function RequestQueueView() {
+  function RequestQueueView({ adminMode, setAdminMode, setAdminUser, ALLOWED_ADMINS }) {
     const [requests, setRequests] = useState([]);
     const [filter, setFilter] = useState('all');
     const [loading, setLoading] = useState(true);
-    const [adminMode, setAdminMode] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null); 
     
     // FETCH REAL DATA
@@ -458,13 +479,29 @@ const App = () => {
       }
     };
 
-    const toggleAdmin = () => {
-      if (adminMode) {
+    // GOOGLE SIGN-IN HANDLER
+    const handleLogin = async () => {
+        try {
+            const result = await signInWithPopup(auth, googleProvider);
+            const email = result.user.email;
+            
+            if (ALLOWED_ADMINS.includes(email)) {
+                setAdminMode(true);
+                setAdminUser(result.user);
+            } else {
+                alert(`Access Denied. The email "${email}" is not authorized as an administrator.`);
+                await signOut(auth);
+            }
+        } catch (error) {
+            console.error("Login failed:", error);
+            alert("Login failed. Please try again.");
+        }
+    };
+
+    const handleLogout = async () => {
+        await signOut(auth);
         setAdminMode(false);
-      } else {
-        const pin = prompt("Enter Admin PIN:"); 
-        if (pin === "1950") setAdminMode(true);
-      }
+        setAdminUser(null);
     };
 
     const filteredRequests = filter === 'all' 
@@ -582,9 +619,16 @@ const App = () => {
           </div>
           
           <div className="flex items-center gap-2 w-full md:w-auto">
-             <button onClick={toggleAdmin} className="p-2 text-indigo-300 hover:text-white transition-colors" title="Admin Login">
-               {adminMode ? <Unlock size={18} /> : <Lock size={18} />}
-             </button>
+             {adminMode ? (
+                 <button onClick={handleLogout} className="flex items-center gap-2 p-2 text-red-200 hover:text-white transition-colors bg-red-950/30 rounded-lg px-3" title="Log Out">
+                    <LogOut size={16} /> <span className="text-xs font-bold uppercase">Admin Logout</span>
+                 </button>
+             ) : (
+                 <button onClick={handleLogin} className="flex items-center gap-2 p-2 text-indigo-300 hover:text-white transition-colors" title="Admin Login">
+                    <Lock size={18} /> <span className="text-xs">Staff Login</span>
+                 </button>
+             )}
+            
             <select 
               className="flex-1 md:w-auto bg-indigo-800 text-white border border-indigo-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={filter}
@@ -708,7 +752,6 @@ const App = () => {
           title: data.eventName || data.projectType || data.businessName || "New Request" 
         });
         
-        // Clear draft after successful submission
         localStorage.removeItem(draftKey);
         setSubmitted(true);
       } catch (error) {
@@ -904,7 +947,7 @@ const App = () => {
                <div><label className="block text-sm font-medium text-slate-700 mb-1">Return Date</label><input name="returnDate" defaultValue={initialData.returnDate} type="date" className="w-full rounded-md border-slate-300 border p-2.5 text-sm" required /></div>
              </div>
 
-             {/* Terms & Conditions for Photo as well */}
+             {/* Terms & Conditions for Photo */}
              <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input type="checkbox" required className="mt-1 w-5 h-5 text-pink-600 rounded focus:ring-pink-500 border-gray-300" />
