@@ -240,6 +240,16 @@ const App = () => {
           </>
         )}
       </main>
+      
+      {/* Footer with Salpointe Tag */}
+      <footer className="text-center py-10 px-4 border-t border-slate-800/50 mt-auto relative z-10">
+        <div className="flex flex-col items-center justify-center gap-3 opacity-60 hover:opacity-100 transition-opacity duration-500">
+            <img src={salpointeLogo} alt="Salpointe Catholic High School" className="w-8 h-8 opacity-80 grayscale hover:grayscale-0 transition-all" />
+            <p className="text-slate-500 text-xs font-mono tracking-widest uppercase">
+                &copy; {new Date().getFullYear()} Salpointe Catholic High School <span className="text-slate-700 mx-2">|</span> CTE Department
+            </p>
+        </div>
+      </footer>
     </div>
   );
 
