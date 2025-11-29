@@ -47,10 +47,10 @@ import {
   Plus, 
   Trash2,
   Edit2,
-  MessageSquare, // Added for Feedback
-  Bug,           // Added for Bug Reports
-  Lightbulb,     // Added for Feature Requests
-  CheckSquare    // Added for Resolving Issues
+  MessageSquare, 
+  Bug,           
+  Lightbulb,     
+  CheckSquare    
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -112,7 +112,7 @@ const Departments = {
   MY_REQUESTS: 'my_requests',
   ANALYTICS: 'analytics',
   INVENTORY: 'inventory',
-  FEEDBACK: 'feedback' // New View
+  FEEDBACK: 'feedback' 
 };
 
 const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
@@ -260,6 +260,7 @@ const App = () => {
             {currentView === Departments.LANDING && <LandingPage currentUser={currentUser} onLogin={handleLogin} onEnter={goToDashboard} />}
             {currentView === Departments.DASHBOARD && <ServiceGrid onViewChange={setCurrentView} currentUser={currentUser} />}
             
+            {/* Forms receive blackouts for validation */}
             {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
             {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
             {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
@@ -271,8 +272,6 @@ const App = () => {
             {currentView === Departments.MY_REQUESTS && <MyRequestsView currentUser={currentUser} />}
             {currentView === Departments.ANALYTICS && adminMode && <AnalyticsView />}
             {currentView === Departments.INVENTORY && adminMode && <InventoryManager inventory={inventory} setInventory={setInventory} />}
-            
-            {/* FEEDBACK VIEW */}
             {currentView === Departments.FEEDBACK && <FeedbackView currentUser={currentUser} adminMode={adminMode} setSubmitted={setSubmitted} onCancel={goToDashboard} />}
           </>
         )}
@@ -292,154 +291,8 @@ const App = () => {
     </div>
   );
 
-  // --- NEW: Feedback View ---
-  function FeedbackView({ currentUser, adminMode, setSubmitted, onCancel }) {
-      const [type, setType] = useState('bug'); // 'bug' or 'feature'
-      const [message, setMessage] = useState('');
-      const [adminFeedbackList, setAdminFeedbackList] = useState([]);
-      
-      // If admin, listen to feedback collection
-      useEffect(() => {
-          if (adminMode) {
-              const q = query(collection(db, "feedback"), orderBy("createdAt", "desc"));
-              const unsubscribe = onSnapshot(q, (snapshot) => {
-                  const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                  setAdminFeedbackList(items);
-              });
-              return () => unsubscribe();
-          }
-      }, [adminMode]);
-
-      const handleSubmit = async (e) => {
-          e.preventDefault();
-          if(!message.trim()) return;
-
-          try {
-              const docData = {
-                  type,
-                  message,
-                  email: currentUser?.email || 'Anonymous',
-                  fullName: currentUser?.displayName || 'Guest',
-                  createdAt: new Date(),
-                  status: 'Open'
-              };
-              await addDoc(collection(db, "feedback"), docData);
-              
-              // Send email if Bug Report
-              if (type === 'bug') {
-                  sendNotificationEmail({
-                      to_name: "Admin",
-                      to_email: "erivers@salpointe.org",
-                      subject: `[BUG REPORT] CTE Hub Issue`,
-                      title: "Bug Report",
-                      status: "Urgent",
-                      message: `User ${docData.fullName} reported a bug:\n\n${message}`
-                  });
-              }
-
-              alert("Feedback received. Thank you for improving the system.");
-              setMessage('');
-              if(!adminMode) onCancel(); 
-          } catch (err) {
-              console.error(err);
-              alert("Error sending feedback.");
-          }
-      };
-
-      const handleResolve = async (id) => {
-          if(window.confirm("Mark this item as Resolved/Closed?")) {
-              await updateDoc(doc(db, "feedback", id), { status: 'Resolved' });
-          }
-      };
-
-      const handleDelete = async (id) => {
-          if(window.confirm("Delete this feedback?")) {
-              await deleteDoc(doc(db, "feedback", id));
-          }
-      };
-
-      return (
-          <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
-              <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl">
-                  <div className="flex items-center gap-4 mb-6">
-                      <div className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/30 text-cyan-400">
-                          <MessageSquare size={28} />
-                      </div>
-                      <div>
-                          <h2 className="text-2xl font-bold text-white">System Feedback</h2>
-                          <p className="text-slate-400 text-sm">Report glitches or suggest system upgrades.</p>
-                      </div>
-                  </div>
-
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <button type="button" onClick={() => setType('bug')} className={`p-4 rounded-xl border text-left transition-all ${type === 'bug' ? 'bg-red-950/40 border-red-500 text-red-400' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}>
-                              <div className="flex items-center gap-2 font-bold mb-1"><Bug size={18} /> Bug Report</div>
-                              <p className="text-xs opacity-80">Something is broken or not working correctly.</p>
-                          </button>
-                          <button type="button" onClick={() => setType('feature')} className={`p-4 rounded-xl border text-left transition-all ${type === 'feature' ? 'bg-amber-950/40 border-amber-500 text-amber-400' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}>
-                              <div className="flex items-center gap-2 font-bold mb-1"><Lightbulb size={18} /> Feature Idea</div>
-                              <p className="text-xs opacity-80">"It would be cool if the app could..."</p>
-                          </button>
-                      </div>
-                      
-                      <div>
-                          <label className="block text-xs font-mono text-slate-500 uppercase mb-2 ml-1">Details</label>
-                          <textarea 
-                              value={message}
-                              onChange={e => setMessage(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-slate-200 focus:border-cyan-500 outline-none h-32" 
-                              placeholder={type === 'bug' ? "Describe what happened and what you expected..." : "Describe your idea for improving the Hub..."}
-                              required 
-                          />
-                      </div>
-                      
-                      <div className="flex justify-end gap-3">
-                          <button type="button" onClick={onCancel} className="px-6 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors">Cancel</button>
-                          <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2 rounded-lg font-bold shadow-lg transition-all">Submit Feedback</button>
-                      </div>
-                  </form>
-              </div>
-
-              {/* ADMIN INBOX SECTION */}
-              {adminMode && (
-                  <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl">
-                      <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><ClipboardList size={18} className="text-purple-400"/> Admin Feedback Inbox</h3>
-                      <div className="space-y-3">
-                          {adminFeedbackList.length === 0 ? <p className="text-slate-500 text-center py-4">No feedback reports found.</p> : 
-                           adminFeedbackList.map(item => (
-                              <div key={item.id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row gap-4 justify-between items-start hover:border-slate-700 transition-colors">
-                                  <div className="flex-1">
-                                      <div className="flex items-center gap-2 mb-1">
-                                          {item.type === 'bug' ? <span className="text-xs font-bold bg-red-900/30 text-red-400 px-2 py-1 rounded flex items-center gap-1"><Bug size={12}/> BUG</span> : 
-                                                                 <span className="text-xs font-bold bg-amber-900/30 text-amber-400 px-2 py-1 rounded flex items-center gap-1"><Lightbulb size={12}/> IDEA</span>}
-                                          {item.status === 'Resolved' && <span className="text-xs font-bold bg-green-900/30 text-green-400 px-2 py-1 rounded">RESOLVED</span>}
-                                          <span className="text-xs text-slate-500 ml-2">{item.fullName} • {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : 'Just now'}</span>
-                                      </div>
-                                      <p className="text-slate-300 text-sm leading-relaxed mt-2">{item.message}</p>
-                                  </div>
-                                  <div className="flex gap-2">
-                                      {item.status !== 'Resolved' && (
-                                          <button onClick={() => handleResolve(item.id)} className="p-2 bg-green-900/20 text-green-500 rounded-lg hover:bg-green-900/40" title="Mark Resolved"><CheckSquare size={16}/></button>
-                                      )}
-                                      <button onClick={() => handleDelete(item.id)} className="p-2 bg-slate-800 text-slate-500 rounded-lg hover:bg-red-900/20 hover:text-red-500" title="Delete"><Trash2 size={16}/></button>
-                                  </div>
-                              </div>
-                           ))
-                          }
-                      </div>
-                  </div>
-              )}
-          </div>
-      );
-  }
-
-  // --- Sub-Components (LandingPage, SuccessView, ServiceGrid, ContactSection, InventoryManager, AnalyticsView, RequestQueueView, FormContainer, FilmForm, GraphicDesignForm, BusinessForm, CulinaryForm, PhotoForm, CalendarView, MyRequestsView) ---
-  // ... (All existing components remain unchanged, just ensuring FeedbackView is integrated above) ...
-  
-  // Need to include these for the file to be complete.
+  // --- Sub-Components ---
   function LandingPage({ currentUser, onLogin, onEnter }) {
-      // ... same as previous
       return (
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-12 animate-fade-in">
             <div className="space-y-6 max-w-4xl mx-auto">
@@ -448,11 +301,11 @@ const App = () => {
                     System Online v1.0
                 </div>
                 <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight leading-tight">
-                    The Future of <br/>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Creative Logistics</span>
+                    Master the Tools. <br/>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Create Without Limits.</span>
                 </h1>
                 <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                    Eliminating the friction of paper logs and email chains. A centralized command center for Salpointe's creative technology.
+                    Your direct link to the CTE professional inventory. Secure the assets you need to build your portfolio—from cinema cameras to culinary prep. If you can dream it, you can reserve it.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
                     {currentUser ? (
@@ -523,10 +376,8 @@ const App = () => {
     );
   }
 
-  // ContactSection, InventoryManager, AnalyticsView, MyRequestsView, CalendarView, RequestQueueView, FormContainer, FilmForm, GraphicDesignForm, BusinessForm, CulinaryForm, PhotoForm
-  // ... include all previous components here, they are unchanged logic-wise but needed for the file ...
-  
   function ContactSection({ initialData = {}, currentUser }) {
+    // ... same
     const defaultName = currentUser?.displayName || initialData.fullName || '';
     const defaultEmail = currentUser?.email || initialData.email || '';
     return (
@@ -542,6 +393,8 @@ const App = () => {
     );
   }
 
+
+  // --- UPDATED: Inventory Manager ---
   function InventoryManager({ inventory, setInventory }) {
     const [localInventory, setLocalInventory] = useState(inventory);
     const [saving, setSaving] = useState(false);
@@ -569,6 +422,26 @@ const App = () => {
             <div className="bg-slate-950/50 border-b border-slate-800 p-6 flex justify-between items-center"><div><h2 className="text-xl font-bold text-white flex items-center gap-2"><Settings className="text-amber-400" /> Inventory Matrix</h2></div><button onClick={handleSave} disabled={saving} className="bg-amber-600 hover:bg-amber-500 text-slate-900 px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 shadow-[0_0_15px_rgba(245,158,11,0.3)]">{saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} {saving ? 'Processing...' : 'Save Changes'}</button></div>
             <div className="p-6 bg-slate-900/30 border-b border-slate-800"><h3 className="text-sm font-mono text-cyan-500 uppercase mb-3">Add New Asset</h3><form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end"><div className="flex-1 w-full"><label className="block text-xs text-slate-500 mb-1">Item Name</label><input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" required /></div><div className="w-24"><label className="block text-xs text-slate-500 mb-1">Count</label><input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" /></div><div className="w-32"><label className="block text-xs text-slate-500 mb-1">Category</label><select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"><option value="film">Film</option><option value="photo">Photo</option><option value="culinary">Culinary</option><option value="general">General</option></select></div><div className="flex items-center gap-2 pb-2"><input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500" /><label className="text-sm text-slate-400">Training Req.</label></div><button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-medium flex items-center gap-1"><Plus size={16}/> Add</button></form></div>
             <div className="p-6 space-y-8">{Object.entries(groupedItems).map(([cat, items]) => (<div key={cat}><h3 className="text-lg font-bold text-white capitalize mb-4 border-b border-slate-800 pb-2 text-emerald-400">{cat} Inventory</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{items.map((item) => (<div key={item.name} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700 flex justify-between items-center hover:border-slate-600 transition-colors">{editingKey === item.name ? (<div className="flex-1 flex items-center gap-2 mr-2"><input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 bg-slate-950 border border-cyan-500 rounded p-1 text-white text-sm outline-none" autoFocus /><label className="flex items-center gap-1 text-xs text-slate-400"><input type="checkbox" checked={editTraining} onChange={e => setEditTraining(e.target.checked)} /> Train</label><button onClick={saveEdit} className="text-green-500 hover:text-green-400 p-1"><Check size={18}/></button><button onClick={cancelEditing} className="text-red-500 hover:text-red-400 p-1"><X size={18}/></button></div>) : (<div className="flex-1 mr-4 flex items-center justify-between"><div><span className="font-mono text-slate-300 text-sm block truncate">{item.name}</span>{item.requiresTraining && <span className="text-[10px] text-red-400 uppercase bg-red-900/20 px-1 rounded">Training Req.</span>}</div><button onClick={() => startEditing(item.name, item)} className="text-slate-600 hover:text-cyan-400 p-1 ml-2"><Edit2 size={14}/></button></div>)}<div className="flex items-center gap-2 border-l border-slate-700 pl-3"><span className="text-xs text-slate-500 uppercase">Qty</span><input type="number" min="0" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value))} className="w-14 p-1 bg-slate-950 border border-slate-700 rounded text-center font-bold text-cyan-400 focus:border-cyan-500 outline-none text-sm"/><button onClick={() => handleDelete(item.name)} className="text-slate-600 hover:text-red-500 transition-colors ml-1"><Trash2 size={16}/></button></div></div>))}</div></div>))}</div>
+        </div>
+    );
+  }
+
+  function FeedbackView({ currentUser, adminMode, setSubmitted, onCancel }) {
+    // ... same
+    const [type, setType] = useState('bug');
+    const [message, setMessage] = useState('');
+    const [adminFeedbackList, setAdminFeedbackList] = useState([]);
+    useEffect(() => { if (adminMode) { const q = query(collection(db, "feedback"), orderBy("createdAt", "desc")); const unsubscribe = onSnapshot(q, (snapshot) => { const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); setAdminFeedbackList(items); }); return () => unsubscribe(); } }, [adminMode]);
+    const handleSubmit = async (e) => { e.preventDefault(); if(!message.trim()) return; try { const docData = { type, message, email: currentUser?.email || 'Anonymous', fullName: currentUser?.displayName || 'Guest', createdAt: new Date(), status: 'Open' }; await addDoc(collection(db, "feedback"), docData); if (type === 'bug') { sendNotificationEmail({ to_name: "Admin", to_email: "erivers@salpointe.org", subject: `[BUG REPORT] CTE Hub Issue`, title: "Bug Report", status: "Urgent", message: `User ${docData.fullName} reported a bug:\n\n${message}` }); } alert("Feedback received."); setMessage(''); if(!adminMode) onCancel(); } catch (err) { console.error(err); alert("Error sending feedback."); } };
+    const handleResolve = async (id) => { if(window.confirm("Mark Resolved?")) await updateDoc(doc(db, "feedback", id), { status: 'Resolved' }); };
+    const handleDelete = async (id) => { if(window.confirm("Delete feedback?")) await deleteDoc(doc(db, "feedback", id)); };
+    return (
+        <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+            <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl">
+                <div className="flex items-center gap-4 mb-6"><div className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/30 text-cyan-400"><MessageSquare size={28} /></div><div><h2 className="text-2xl font-bold text-white">System Feedback</h2><p className="text-slate-400 text-sm">Report glitches or suggest system upgrades.</p></div></div>
+                <form onSubmit={handleSubmit} className="space-y-6"><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><button type="button" onClick={() => setType('bug')} className={`p-4 rounded-xl border text-left transition-all ${type === 'bug' ? 'bg-red-950/40 border-red-500 text-red-400' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}><div className="flex items-center gap-2 font-bold mb-1"><Bug size={18} /> Bug Report</div><p className="text-xs opacity-80">Something is broken.</p></button><button type="button" onClick={() => setType('feature')} className={`p-4 rounded-xl border text-left transition-all ${type === 'feature' ? 'bg-amber-950/40 border-amber-500 text-amber-400' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}><div className="flex items-center gap-2 font-bold mb-1"><Lightbulb size={18} /> Feature Idea</div><p className="text-xs opacity-80">"It would be cool if..."</p></button></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-2 ml-1">Details</label><textarea value={message} onChange={e => setMessage(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-slate-200 focus:border-cyan-500 outline-none h-32" placeholder="Describe..." required /></div><div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-6 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors">Cancel</button><button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2 rounded-lg font-bold shadow-lg transition-all">Submit Feedback</button></div></form>
+            </div>
+            {adminMode && (<div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl"><h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><ClipboardList size={18} className="text-purple-400"/> Admin Feedback Inbox</h3><div className="space-y-3">{adminFeedbackList.length === 0 ? <p className="text-slate-500 text-center py-4">No reports.</p> : adminFeedbackList.map(item => (<div key={item.id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row gap-4 justify-between items-start hover:border-slate-700 transition-colors"><div className="flex-1"><div className="flex items-center gap-2 mb-1">{item.type === 'bug' ? <span className="text-xs font-bold bg-red-900/30 text-red-400 px-2 py-1 rounded flex items-center gap-1"><Bug size={12}/> BUG</span> : <span className="text-xs font-bold bg-amber-900/30 text-amber-400 px-2 py-1 rounded flex items-center gap-1"><Lightbulb size={12}/> IDEA</span>}{item.status === 'Resolved' && <span className="text-xs font-bold bg-green-900/30 text-green-400 px-2 py-1 rounded">RESOLVED</span>}<span className="text-xs text-slate-500 ml-2">{item.fullName}</span></div><p className="text-slate-300 text-sm leading-relaxed mt-2">{item.message}</p></div><div className="flex gap-2">{item.status !== 'Resolved' && (<button onClick={() => handleResolve(item.id)} className="p-2 bg-green-900/20 text-green-500 rounded-lg hover:bg-green-900/40" title="Mark Resolved"><CheckSquare size={16}/></button>)}<button onClick={() => handleDelete(item.id)} className="p-2 bg-slate-800 text-slate-500 rounded-lg hover:bg-red-900/20 hover:text-red-500" title="Delete"><Trash2 size={16}/></button></div></div>))}</div></div>)}
         </div>
     );
   }
@@ -606,103 +479,6 @@ const App = () => {
               <div className="bg-amber-950/30 rounded-xl p-5 border border-amber-500/20"><h4 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-2">Pending</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-amber-400 font-mono">{stats.pending}</span></div></div>
               <div className="md:col-span-2 bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><PieChart size={16} className="text-purple-400" /> Requests by Department</h3><div className="space-y-4">{Object.entries(stats.deptCounts).sort(([,a], [,b]) => b - a).map(([dept, count]) => { const percentage = (count / stats.total) * 100; return (<div key={dept}><div className="flex justify-between text-xs mb-2 font-mono"><span className="text-slate-400">{dept}</span><span className="text-cyan-400">{count}</span></div><div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${percentage}%` }}></div></div></div>); })}</div></div>
               <div className="bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><Camera size={16} className="text-pink-400" /> Top Gear</h3><ul className="space-y-3">{stats.topEquipment.map(([item, count], index) => (<li key={item} className="flex items-center gap-3"><div className="w-6 h-6 rounded bg-slate-800 text-cyan-400 flex items-center justify-center text-xs font-mono border border-slate-700">{index + 1}</div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-300 truncate">{item.replace(' *', '')}</p><p className="text-xs text-slate-500 font-mono">{count} uses</p></div></li>))}</ul></div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  function MyRequestsView({ currentUser }) {
-    // ... same
-    const [myRequests, setMyRequests] = useState([]);
-    const [loading, setLoading] = useState(true);
-    useEffect(() => {
-        if (!currentUser) return;
-        const q = query(collection(db, "requests"), where("email", "==", currentUser.email), orderBy("createdAt", "desc"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A' }));
-            setMyRequests(reqs);
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, [currentUser]);
-    const handleCancel = async (id) => { if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "requests", id)); };
-    const getStatusBadge = (status) => {
-        const styles = { 'Approved': 'bg-green-950/50 text-green-400 border-green-500/30', 'Denied': 'bg-red-950/50 text-red-400 border-red-500/30', 'Completed': 'bg-slate-800 text-slate-400 border-slate-700', 'default': 'bg-amber-950/50 text-amber-400 border-amber-500/30' };
-        return <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${styles[status] || styles['default']}`}>{status}</span>;
-    };
-    return (
-        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-            <div className="bg-slate-950/50 border-b border-slate-800 p-6"><h2 className="text-xl font-bold text-white flex items-center gap-2"><History className="text-cyan-400" /> My Request History</h2></div>
-            <div className="overflow-x-auto">
-                {loading ? <div className="p-8 text-center text-slate-500 font-mono">LOADING DATA...</div> : myRequests.length === 0 ? <div className="p-12 text-center text-slate-500">No records found.</div> : (
-                    <table className="w-full text-left border-collapse min-w-[700px]">
-                        <thead><tr className="bg-slate-800/50 border-b border-slate-700 text-xs uppercase text-slate-400 font-mono"><th className="p-4">Ref ID</th><th className="p-4">Dept</th><th className="p-4">Project</th><th className="p-4">Date Submitted</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
-                        <tbody className="divide-y divide-slate-800">{myRequests.map((req) => (
-                            <tr key={req.id} className="hover:bg-slate-800/50 transition-colors"><td className="p-4 text-cyan-400 font-mono text-xs">{req.displayId}</td><td className="p-4 text-slate-300 text-sm capitalize">{req.dept}</td><td className="p-4 font-semibold text-white text-sm">{req.title}</td><td className="p-4 text-slate-400 text-sm font-mono">{req.formattedDate}</td><td className="p-4">{getStatusBadge(req.status)}</td><td className="p-4">{req.status === 'Pending Review' && <button onClick={() => handleCancel(req.id)} className="text-xs text-red-400 border border-red-900 hover:bg-red-950/50 px-3 py-1 rounded transition-colors">Cancel</button>}</td></tr>
-                        ))}</tbody>
-                    </table>
-                )}
-            </div>
-        </div>
-    );
-  }
-
-  function CalendarView({ adminMode, blackouts }) {
-    // ... same
-    const [displayDate, setDisplayDate] = useState(new Date()); 
-    const [selectedDate, setSelectedDate] = useState(null);
-    const [filter, setFilter] = useState('all');
-    const [events, setEvents] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const nextMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() + 1)));
-    const prevMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() - 1)));
-    useEffect(() => { const q = query(collection(db, "requests")); const unsubscribe = onSnapshot(q, (snapshot) => { const fetchedEvents = snapshot.docs.map(doc => { const data = doc.data(); let dateStr = data.eventDate || data.checkoutDate || data.pickupDate || data.deadline; if (!dateStr) return null; const [y, m, d] = dateStr.split('-').map(Number); const dateObj = new Date(y, m - 1, d); return { id: doc.id, title: data.title || data.requestName || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data }; }).filter(e => e !== null && e.status === 'Approved'); setEvents(fetchedEvents); setLoading(false); }); return () => unsubscribe(); }, []);
-    const handleDateClick = async (day) => { const clickedDate = new Date(displayDate.getFullYear(), displayDate.getMonth(), day); const dateStr = clickedDate.toISOString().split('T')[0]; if (adminMode) { if (blackouts.includes(dateStr)) { if(window.confirm(`Re-open ${dateStr}?`)) await deleteDoc(doc(db, "blackout_dates", dateStr)); } else { if(window.confirm(`Blackout ${dateStr}?`)) await setDoc(doc(db, "blackout_dates", dateStr), { reason: "Closed" }); } return; } setSelectedDate(selectedDate === day ? null : day); };
-    const getDaysInMonth = (date) => { const year = date.getFullYear(); const month = date.getMonth(); const days = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); return { days, firstDay, monthName: date.toLocaleString('default', { month: 'long' }), year }; };
-    const { days, firstDay, monthName, year } = getDaysInMonth(displayDate);
-    const daysArray = Array.from({ length: days }, (_, i) => i + 1);
-    const empties = Array.from({ length: firstDay }, (_, i) => i);
-    const getEventsForDay = (dayNum) => events.filter(e => e.date.getDate() === dayNum && e.date.getMonth() === displayDate.getMonth() && e.date.getFullYear() === displayDate.getFullYear() && (filter === 'all' || e.dept === filter));
-    const getGoogleCalendarUrl = (event) => { const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE"; const text = `&text=${encodeURIComponent(`[${event.dept}] ${event.title}`)}`; const details = `&details=${encodeURIComponent(`Ref: ${event.displayId}\nRequested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`; const location = `&location=${encodeURIComponent(event.location || 'Salpointe Catholic High School')}`; const y = event.date.getFullYear(); const m = String(event.date.getMonth() + 1).padStart(2, '0'); const d = String(event.date.getDate()).padStart(2, '0'); const dateString = `${y}${m}${d}`; const nextDay = new Date(event.date); nextDay.setDate(nextDay.getDate() + 1); const ny = nextDay.getFullYear(); const nm = String(nextDay.getMonth() + 1).padStart(2, '0'); const nd = String(nextDay.getDate()).padStart(2, '0'); const nextDateString = `${ny}${nm}${nd}`; const dates = `&dates=${dateString}/${nextDateString}`; return `${baseUrl}${text}${dates}${details}${location}`; };
-
-    return (
-      <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-        <div className="bg-slate-950/50 p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div><div className="flex items-center gap-4 mb-1"><button onClick={prevMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronLeft size={24}/></button><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-white">{monthName} <span className="text-slate-500">{year}</span></h2><button onClick={nextMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronRight size={24}/></button></div></div>
-          <div className="flex bg-slate-800/50 rounded-lg p-1 w-full md:w-auto overflow-x-auto">
-            {['all', Departments.FILM, Departments.PHOTO, Departments.CULINARY].map(f => (<button key={f} onClick={() => setFilter(f)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap capitalize ${filter === f ? 'bg-cyan-600 text-white shadow-[0_0_10px_rgba(8,145,178,0.4)]' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>{f === 'all' ? 'All' : f}</button>))}
-          </div>
-        </div>
-        <div className="p-6">
-           {adminMode && <div className="mb-4 p-3 bg-slate-800/50 border border-slate-700 rounded text-xs text-slate-400 flex items-center gap-2 font-mono"><Ban size={14} className="text-red-400"/> Admin Mode: Click a date to toggle blackout.</div>}
-           <div className="overflow-x-auto pb-2">
-            {loading ? <div className="text-center py-8 text-slate-500 font-mono">LOADING MATRIX...</div> : (
-              <div className="min-w-[600px] md:min-w-0 grid grid-cols-7 gap-px bg-slate-800 border border-slate-800 rounded-xl overflow-hidden shadow-inner">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="bg-slate-900 p-2 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">{day}</div>)}
-                {empties.map(i => <div key={`empty-${i}`} className="bg-slate-950/50 min-h-[80px] md:min-h-[100px]" />)}
-                {daysArray.map(day => {
-                  const dayEvents = getEventsForDay(day);
-                  const isToday = day === new Date().getDate() && displayDate.getMonth() === new Date().getMonth() && displayDate.getFullYear() === new Date().getFullYear();
-                  const currentDateStr = new Date(year, displayDate.getMonth(), day).toISOString().split('T')[0];
-                  const isBlackout = blackouts.includes(currentDateStr);
-                  return (
-                    <div key={day} className={`min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-800 relative group cursor-pointer transition-colors ${isBlackout ? 'bg-slate-900/30' : 'bg-slate-950/50'} ${selectedDate === day ? 'bg-cyan-900/20 border-cyan-500/30' : 'hover:bg-slate-900'}`} onClick={() => handleDateClick(day)}>
-                      <span className={`text-xs md:text-sm font-medium inline-block w-6 h-6 md:w-7 md:h-7 leading-6 md:leading-7 text-center rounded-full mb-1 ${isToday ? 'bg-red-600 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]' : 'text-slate-400'}`}>{day}</span>
-                      {isBlackout ? (<div className="flex justify-center mt-2"><Ban className="text-red-900/50" size={20} /></div>) : (<div className="space-y-1">{dayEvents.map(e => <div key={e.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${e.type === 'checkout' ? 'bg-cyan-950/50 text-cyan-400 border-cyan-800/50' : 'bg-emerald-950/50 text-emerald-400 border-emerald-800/50'}`}>{e.title}</div>)}</div>)}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          {selectedDate && !blackouts.includes(new Date(year, displayDate.getMonth(), selectedDate).toISOString().split('T')[0]) && (
-            <div className="mt-6 p-4 bg-slate-900/50 rounded-xl border border-slate-800 animate-fade-in">
-              <h4 className="font-bold text-white mb-3 flex items-center gap-2"><Calendar size={16} className="text-cyan-400"/> {monthName} {selectedDate}</h4>
-              {getEventsForDay(selectedDate).length === 0 ? <p className="text-slate-500 text-sm">Sector clear. No events.</p> : (
-                <div className="space-y-3">{getEventsForDay(selectedDate).map(e => (<div key={e.id} className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-sm"><div><p className="font-bold text-slate-200 text-sm">{e.title}</p><p className="text-xs text-slate-400 uppercase">{e.dept} • {e.fullName}</p></div><a href={getGoogleCalendarUrl(e)} target="_blank" rel="noopener noreferrer" className="bg-slate-700 hover:bg-slate-600 p-2 rounded text-white transition-colors"><CalendarPlus size={16}/></a></div>))}</div>
-              )}
             </div>
           )}
         </div>
@@ -841,11 +617,11 @@ const App = () => {
   // --- Department Specific Forms ---
 
   function FilmForm({ setSubmitted, onCancel, currentUser, inventory, blackouts }) { 
+    // ... (same)
     const title = 'Film';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     const [requestType, setRequestType] = useState(initialData.requestType || 'checkout'); 
-    
     const [availableStock, setAvailableStock] = useState({});
     const [datesSelected, setDatesSelected] = useState(false);
     const [dateRange, setDateRange] = useState({ start: initialData.checkoutDate || '', end: initialData.returnDate || '' });
@@ -861,7 +637,9 @@ const App = () => {
             querySnapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.status === 'Denied' || data.status === 'Completed') return;
-                if (data.checkoutDate <= dateRange.end && data.returnDate >= dateRange.start) {
+                const reqStart = data.checkoutDate;
+                const reqEnd = data.returnDate;
+                if (reqStart <= dateRange.end && reqEnd >= dateRange.start) {
                     if (data.equipment) {
                         const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment];
                         items.forEach(item => { usageCounts[item] = (usageCounts[item] || 0) + 1; });
@@ -1042,7 +820,7 @@ const App = () => {
 
             const stockStatus = {};
             Object.keys(inventory).forEach(item => { 
-                const total = inventory[item].count; // Fix: Access .count
+                const total = inventory[item].count; 
                 const used = usageCounts[item] || 0;
                 stockStatus[item] = Math.max(0, total - used);
             });
