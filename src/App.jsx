@@ -50,7 +50,8 @@ import {
   MessageSquare, 
   Bug,           
   Lightbulb,     
-  CheckSquare    
+  CheckSquare,
+  Gamepad2 // Added Gamepad Icon
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -112,7 +113,8 @@ const Departments = {
   MY_REQUESTS: 'my_requests',
   ANALYTICS: 'analytics',
   INVENTORY: 'inventory',
-  FEEDBACK: 'feedback' 
+  FEEDBACK: 'feedback',
+  GAME: 'game' // New Game View
 };
 
 const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
@@ -218,6 +220,13 @@ const App = () => {
                 </button>
             )}
             
+            {/* GAME BUTTON */}
+            {currentView !== 'landing' && (
+                <button onClick={() => { setCurrentView(Departments.GAME); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-all flex items-center gap-2 border ${currentView === Departments.GAME ? 'bg-pink-950/50 border-pink-500 text-pink-400' : 'border-transparent text-slate-400 hover:text-pink-400 hover:bg-slate-800'}`}>
+                <Gamepad2 size={16} /><span className="hidden sm:inline">Arcade</span>
+                </button>
+            )}
+            
             {currentUser ? (
                 <>
                     {currentView !== 'landing' && (
@@ -260,7 +269,6 @@ const App = () => {
             {currentView === Departments.LANDING && <LandingPage currentUser={currentUser} onLogin={handleLogin} onEnter={goToDashboard} />}
             {currentView === Departments.DASHBOARD && <ServiceGrid onViewChange={setCurrentView} currentUser={currentUser} />}
             
-            {/* Forms receive blackouts for validation */}
             {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
             {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
             {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
@@ -273,6 +281,9 @@ const App = () => {
             {currentView === Departments.ANALYTICS && adminMode && <AnalyticsView />}
             {currentView === Departments.INVENTORY && adminMode && <InventoryManager inventory={inventory} setInventory={setInventory} />}
             {currentView === Departments.FEEDBACK && <FeedbackView currentUser={currentUser} adminMode={adminMode} setSubmitted={setSubmitted} onCancel={goToDashboard} />}
+            
+            {/* NEW: GAME VIEW */}
+            {currentView === Departments.GAME && <GameView onExit={goToDashboard} />}
           </>
         )}
       </main>
@@ -291,8 +302,163 @@ const App = () => {
     </div>
   );
 
-  // --- Sub-Components ---
+  // --- NEW: 8-BIT GAME COMPONENT ---
+  function GameView({ onExit }) {
+      const [gameState, setGameState] = useState('start'); // start, playing, won, lost
+      const [bossHealth, setBossHealth] = useState(100);
+      const [playerHealth, setPlayerHealth] = useState(100);
+      const [currentQuestion, setCurrentQuestion] = useState(null);
+      const [log, setLog] = useState(["SYSTEM INITIALIZED...", "BOSS DETECTED: THE DEADLINE"]);
+
+      const QUESTIONS = [
+          { q: "What is the standard frame rate for cinema?", a: "24fps", b: "30fps", c: "60fps", correct: "a", damage: 20, type: "Film" },
+          { q: "Which tool creates a smooth tracking shot?", a: "Tripod", b: "Gimbal", c: "Boom", correct: "b", damage: 25, type: "Film" },
+          { q: "What controls the amount of light hitting the sensor?", a: "ISO", b: "Shutter Speed", c: "Aperture", correct: "c", damage: 20, type: "Photo" },
+          { q: "What file format is best for editing photos?", a: "JPEG", b: "RAW", c: "PNG", correct: "b", damage: 30, type: "Photo" },
+          { q: "Safe internal temp for chicken?", a: "145°F", b: "155°F", c: "165°F", correct: "c", damage: 25, type: "Culinary" },
+          { q: "What represents profit after expenses?", a: "Revenue", b: "Net Income", c: "Gross Margin", correct: "b", damage: 20, type: "Business" },
+          { q: "Which color mode is for printing?", a: "RGB", b: "CMYK", c: "HEX", correct: "b", damage: 20, type: "Graphic" },
+          { q: "Shortcut to 'Undo' on Mac?", a: "Cmd+Z", b: "Cmd+C", c: "Cmd+X", correct: "a", damage: 15, type: "General" },
+      ];
+
+      const startGame = () => {
+          setGameState('playing');
+          setBossHealth(100);
+          setPlayerHealth(100);
+          setLog(["BATTLE STARTED!"]);
+          nextQuestion();
+      };
+
+      const nextQuestion = () => {
+          const randomQ = QUESTIONS[Math.floor(Math.random() * QUESTIONS.length)];
+          setCurrentQuestion(randomQ);
+      };
+
+      const handleAnswer = (choice) => {
+          if (choice === currentQuestion.correct) {
+              const newBossHealth = Math.max(0, bossHealth - currentQuestion.damage);
+              setBossHealth(newBossHealth);
+              setLog(prev => [`CRITICAL HIT! -${currentQuestion.damage} HP to Deadline`, ...prev]);
+              if (newBossHealth === 0) {
+                  setGameState('won');
+              } else {
+                  nextQuestion();
+              }
+          } else {
+              const newPlayerHealth = Math.max(0, playerHealth - 25);
+              setPlayerHealth(newPlayerHealth);
+              setLog(prev => [`WRONG! You took 25 damage.`, ...prev]);
+              if (newPlayerHealth === 0) {
+                  setGameState('lost');
+              } else {
+                  nextQuestion();
+              }
+          }
+      };
+
+      return (
+          <div className="max-w-3xl mx-auto bg-black border-4 border-slate-700 rounded-xl overflow-hidden font-mono shadow-2xl relative animate-fade-in">
+              {/* CRT Effect Overlay */}
+              <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]"></div>
+              
+              <div className="bg-slate-900 p-4 border-b-4 border-slate-700 flex justify-between items-center">
+                  <div className="text-green-400 text-xs">LANCER_OS v9.0</div>
+                  <button onClick={onExit} className="text-red-500 hover:text-red-400 text-xs uppercase">[ EXIT GAME ]</button>
+              </div>
+
+              <div className="p-8 min-h-[500px] flex flex-col relative z-0">
+                  {gameState === 'start' && (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                          <Gamepad2 size={64} className="text-green-500 animate-bounce"/>
+                          <h2 className="text-4xl font-bold text-white tracking-widest">TRIVIA QUEST</h2>
+                          <p className="text-slate-400 max-w-md">Defeat the <span className="text-red-500">PROJECT DEADLINE</span> by answering CTE technical questions correctly.</p>
+                          <button onClick={startGame} className="px-8 py-4 bg-green-600 hover:bg-green-500 text-black font-bold text-xl rounded shadow-[4px_4px_0px_0px_rgba(255,255,255,0.5)] active:translate-y-1 active:shadow-none transition-all">START GAME</button>
+                      </div>
+                  )}
+
+                  {gameState === 'playing' && currentQuestion && (
+                      <div className="flex-1 flex flex-col justify-between">
+                          {/* HUD */}
+                          <div className="flex justify-between mb-8">
+                              <div className="w-1/3">
+                                  <div className="text-green-400 text-xs mb-1">STUDENT (YOU)</div>
+                                  <div className="h-4 bg-slate-800 rounded-full border border-slate-600 overflow-hidden">
+                                      <div className="h-full bg-green-500 transition-all duration-500" style={{width: `${playerHealth}%`}}></div>
+                                  </div>
+                                  <div className="text-right text-xs text-slate-500 mt-1">{playerHealth}/100</div>
+                              </div>
+                              <div className="text-center text-slate-600 font-bold text-xl">VS</div>
+                              <div className="w-1/3">
+                                  <div className="text-red-400 text-xs mb-1 text-right">THE DEADLINE (BOSS)</div>
+                                  <div className="h-4 bg-slate-800 rounded-full border border-slate-600 overflow-hidden">
+                                      <div className="h-full bg-red-500 transition-all duration-500" style={{width: `${bossHealth}%`}}></div>
+                                  </div>
+                                  <div className="text-right text-xs text-slate-500 mt-1">{bossHealth}/100</div>
+                              </div>
+                          </div>
+
+                          {/* SCENE */}
+                          <div className="flex-1 flex items-center justify-center mb-8 relative">
+                             {/* Player Sprite */}
+                             <div className="absolute left-10 bottom-0 text-6xl animate-pulse">🧑‍💻</div>
+                             {/* Attack Effect */}
+                             <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 text-yellow-400 font-bold text-xl opacity-0 animate-ping">HIT!</div>
+                             {/* Boss Sprite */}
+                             <div className="absolute right-10 bottom-0 text-8xl animate-bounce">👹</div>
+                          </div>
+
+                          {/* QUESTION BOX */}
+                          <div className="bg-slate-800 border-2 border-green-500/50 p-6 rounded-lg mb-4 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
+                              <div className="text-xs text-green-400 mb-2 uppercase">Category: {currentQuestion.type}</div>
+                              <h3 className="text-xl text-white mb-6">{currentQuestion.q}</h3>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                  {['a', 'b', 'c'].map((choice) => (
+                                      <button 
+                                          key={choice} 
+                                          onClick={() => handleAnswer(choice)}
+                                          className="px-4 py-3 bg-slate-900 hover:bg-slate-700 border border-slate-600 text-cyan-300 rounded text-left transition-colors text-sm"
+                                      >
+                                          <span className="text-slate-500 mr-2">[{choice.toUpperCase()}]</span> {currentQuestion[choice]}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+
+                          {/* LOG */}
+                          <div className="h-24 overflow-y-auto bg-black p-2 border border-slate-800 text-xs font-mono">
+                              {log.map((entry, i) => (
+                                  <div key={i} className={entry.includes('WRONG') ? 'text-red-500' : 'text-green-500'}>{'>'} {entry}</div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
+
+                  {gameState === 'won' && (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 animate-bounce">
+                          <div className="text-6xl">🏆</div>
+                          <h2 className="text-4xl font-bold text-yellow-400">VICTORY!</h2>
+                          <p className="text-slate-300">You defeated the Deadline. Project Submitted.</p>
+                          <button onClick={startGame} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded border border-slate-500">PLAY AGAIN</button>
+                      </div>
+                  )}
+
+                  {gameState === 'lost' && (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
+                          <div className="text-6xl">💀</div>
+                          <h2 className="text-4xl font-bold text-red-500">GAME OVER</h2>
+                          <p className="text-slate-400">The Deadline won. Request Extension?</p>
+                          <button onClick={startGame} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded border border-slate-500">RETRY LEVEL</button>
+                      </div>
+                  )}
+              </div>
+          </div>
+      );
+  }
+
+  // ... LandingPage, SuccessView, ServiceGrid, ContactSection, InventoryManager, AnalyticsView, RequestQueueView, FormContainer, FilmForm, GraphicDesignForm, BusinessForm, CulinaryForm, PhotoForm, CalendarView, MyRequestsView, FeedbackView ...
+  // (All previous components kept intact)
   function LandingPage({ currentUser, onLogin, onEnter }) {
+      // ... same as previous
       return (
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-12 animate-fade-in">
             <div className="space-y-6 max-w-4xl mx-auto">
@@ -394,8 +560,8 @@ const App = () => {
   }
 
 
-  // --- UPDATED: Inventory Manager ---
   function InventoryManager({ inventory, setInventory }) {
+    // ... same
     const [localInventory, setLocalInventory] = useState(inventory);
     const [saving, setSaving] = useState(false);
     const [newItemName, setNewItemName] = useState('');
@@ -421,7 +587,7 @@ const App = () => {
         <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
             <div className="bg-slate-950/50 border-b border-slate-800 p-6 flex justify-between items-center"><div><h2 className="text-xl font-bold text-white flex items-center gap-2"><Settings className="text-amber-400" /> Inventory Matrix</h2></div><button onClick={handleSave} disabled={saving} className="bg-amber-600 hover:bg-amber-500 text-slate-900 px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 shadow-[0_0_15px_rgba(245,158,11,0.3)]">{saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} {saving ? 'Processing...' : 'Save Changes'}</button></div>
             <div className="p-6 bg-slate-900/30 border-b border-slate-800"><h3 className="text-sm font-mono text-cyan-500 uppercase mb-3">Add New Asset</h3><form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end"><div className="flex-1 w-full"><label className="block text-xs text-slate-500 mb-1">Item Name</label><input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" required /></div><div className="w-24"><label className="block text-xs text-slate-500 mb-1">Count</label><input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" /></div><div className="w-32"><label className="block text-xs text-slate-500 mb-1">Category</label><select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"><option value="film">Film</option><option value="photo">Photo</option><option value="culinary">Culinary</option><option value="general">General</option></select></div><div className="flex items-center gap-2 pb-2"><input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500" /><label className="text-sm text-slate-400">Training Req.</label></div><button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-medium flex items-center gap-1"><Plus size={16}/> Add</button></form></div>
-            <div className="p-6 space-y-8">{Object.entries(groupedItems).map(([cat, items]) => (<div key={cat}><h3 className="text-lg font-bold text-white capitalize mb-4 border-b border-slate-800 pb-2 text-emerald-400">{cat} Inventory</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{items.map((item) => (<div key={item.name} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700 flex justify-between items-center hover:border-slate-600 transition-colors">{editingKey === item.name ? (<div className="flex-1 flex items-center gap-2 mr-2"><input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 bg-slate-950 border border-cyan-500 rounded p-1 text-white text-sm outline-none" autoFocus /><label className="flex items-center gap-1 text-xs text-slate-400"><input type="checkbox" checked={editTraining} onChange={e => setEditTraining(e.target.checked)} /> Train</label><button onClick={saveEdit} className="text-green-500 hover:text-green-400 p-1"><Check size={18}/></button><button onClick={cancelEditing} className="text-red-500 hover:text-red-400 p-1"><X size={18}/></button></div>) : (<div className="flex-1 mr-4 flex items-center justify-between"><div><span className="font-mono text-slate-300 text-sm block truncate">{item.name}</span>{item.requiresTraining && <span className="text-[10px] text-red-400 uppercase bg-red-900/20 px-1 rounded">Training Req.</span>}</div><button onClick={() => startEditing(item.name, item)} className="text-slate-600 hover:text-cyan-400 p-1 ml-2"><Edit2 size={14}/></button></div>)}<div className="flex items-center gap-2 border-l border-slate-700 pl-3"><span className="text-xs text-slate-500 uppercase">Qty</span><input type="number" min="0" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value))} className="w-14 p-1 bg-slate-950 border border-slate-700 rounded text-center font-bold text-cyan-400 focus:border-cyan-500 outline-none text-sm"/><button onClick={() => handleDelete(item.name)} className="text-slate-600 hover:text-red-500 transition-colors ml-1"><Trash2 size={16}/></button></div></div>))}</div></div>))}</div>
+            <div className="p-6 space-y-8">{Object.entries(groupedItems).map(([cat, items]) => (<div key={cat}><h3 className="text-lg font-bold text-white capitalize mb-4 border-b border-slate-800 pb-2 text-emerald-400">{cat} Inventory</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{items.map((item) => (<div key={item.name} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700 flex justify-between items-center hover:border-slate-600 transition-colors">{editingKey === item.name ? (<div className="flex-1 flex items-center gap-2 mr-2"><input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 bg-slate-950 border border-cyan-500 rounded p-1 text-white text-sm outline-none" autoFocus /><label className="flex items-center gap-1 text-xs text-slate-400"><input type="checkbox" checked={editTraining} onChange={e => setEditTraining(e.target.checked)} /> Train</label><button onClick={saveEdit} className="text-green-500 hover:text-green-400 p-1"><Check size={18}/></button><button onClick={cancelEditing} className="text-red-500 hover:text-red-400 p-1"><X size={18}/></button></div>) : (<div className="flex-1 mr-4 flex items-center justify-between"><div><span className="font-mono text-slate-300 text-sm block truncate">{item.name.replace(' *','').replace('*','')}</span>{item.requiresTraining && <span className="text-[10px] text-red-400 uppercase bg-red-900/20 px-1 rounded">Training Req.</span>}</div><button onClick={() => startEditing(item.name, item)} className="text-slate-600 hover:text-cyan-400 p-1 ml-2"><Edit2 size={14}/></button></div>)}<div className="flex items-center gap-2 border-l border-slate-700 pl-3"><span className="text-xs text-slate-500 uppercase">Qty</span><input type="number" min="0" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value))} className="w-14 p-1 bg-slate-950 border border-slate-700 rounded text-center font-bold text-cyan-400 focus:border-cyan-500 outline-none text-sm"/><button onClick={() => handleDelete(item.name)} className="text-slate-600 hover:text-red-500 transition-colors ml-1"><Trash2 size={16}/></button></div></div>))}</div></div>))}</div>
         </div>
     );
   }
@@ -696,7 +862,8 @@ const App = () => {
                     {filmItems.map(([name, data]) => {
                         const remaining = availableStock[name] !== undefined ? availableStock[name] : 99; 
                         const isSoldOut = remaining <= 0;
-                        const displayName = name.replace(' *', '').replace('*', ''); // Clean name for display
+                        // REMOVE asterisk from display name to avoid duplication if stored in key
+                        const displayName = name.replace(' *', '').replace('*', ''); 
                         return (<label key={name} className={`flex items-center space-x-3 p-3 border rounded-lg transition-all duration-200 ${isSoldOut ? 'bg-slate-900/50 border-slate-800 opacity-50 cursor-not-allowed' : 'bg-slate-900 border-slate-800 hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(8,145,178,0.1)] cursor-pointer'}`}><input type="checkbox" name="equipment" value={name} disabled={isSoldOut} defaultChecked={initialData.equipment?.includes(name)} className="w-5 h-5 rounded border-slate-600 text-cyan-600 focus:ring-cyan-500 bg-slate-800" /><div className="flex-1"><span className="text-slate-200 text-sm block font-medium">{displayName} {data.requiresTraining && <span className="text-red-400">*</span>}</span><span className={`text-[10px] font-mono uppercase tracking-wider ${isSoldOut ? 'text-red-500' : 'text-emerald-500'}`}>{isSoldOut ? 'OFFLINE / UNAVAILABLE' : `${remaining} UNITS ACTIVE`}</span></div></label>);
                     })}
                     </div>
