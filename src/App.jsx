@@ -218,6 +218,7 @@ const App = () => {
 
       <header className="bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 sticky top-0 z-50 shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
         <div className="max-w-7xl mx-auto px-4 py-3 md:py-4 flex flex-wrap items-center justify-between gap-y-3 relative z-10">
+          
           <div className="flex items-center space-x-4 cursor-pointer group" onClick={goHome}>
             <div className="relative">
                 <div className="absolute inset-0 bg-red-600 blur-lg opacity-40 group-hover:opacity-60 transition-opacity rounded-full"></div>
@@ -231,6 +232,17 @@ const App = () => {
             </div>
           </div>
           
+          {/* MOBILE LOGOUT BUTTON (Absolute Top Right) */}
+          {currentUser && (
+            <button 
+                onClick={handleLogout} 
+                className="md:hidden absolute top-3 right-4 p-2 rounded-full bg-slate-800 border border-red-900/50 text-red-400 hover:bg-slate-700 z-50"
+                title="Logout"
+            >
+                <LogOut size={18} />
+            </button>
+          )}
+
           <nav className="flex items-center gap-1 md:gap-2 ml-auto">
             {!isRequestView && currentView !== 'landing' && currentView !== 'dashboard' && (
                <button onClick={goToDashboard} className="text-xs md:text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 px-3 py-2 rounded-lg transition-all flex items-center gap-2 mr-1 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]">
@@ -264,8 +276,10 @@ const App = () => {
                         </button>
                       </>
                     )}
-                    <div className="w-px h-6 bg-slate-700 mx-1"></div>
-                    <button onClick={handleLogout} className="ml-1 text-xs md:text-sm font-medium px-3 py-2 rounded-lg border border-red-900/30 hover:border-red-500 text-red-400 hover:bg-red-950/30 transition-all flex items-center gap-2" title={`Logged in as ${currentUser.email}`}>
+                    
+                    {/* DESKTOP LOGOUT (Hidden on Mobile) */}
+                    <div className="hidden md:block w-px h-6 bg-slate-700 mx-1"></div>
+                    <button onClick={handleLogout} className="hidden md:flex ml-1 text-xs md:text-sm font-medium px-3 py-2 rounded-lg border border-red-900/30 hover:border-red-500 text-red-400 hover:bg-red-950/30 transition-all items-center gap-2" title={`Logged in as ${currentUser.email}`}>
                         <LogOut size={16} />
                     </button>
                 </>
