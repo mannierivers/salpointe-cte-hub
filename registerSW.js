@@ -1,1 +1,0 @@
-if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/salpointe-cte-hub/sw.js', { scope: '/salpointe-cte-hub/' })})}
