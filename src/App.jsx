@@ -604,6 +604,125 @@ const App = () => {
     );
   }
 
+  function InventoryManager({ inventory, setInventory }) {
+    const [newItem, setNewItem] = useState({ name: '', count: 1, category: 'general', requiresTraining: false });
+    const [isDirty, setIsDirty] = useState(false);
+
+    const handleUpdate = (name, field, value) => {
+        const updated = { ...inventory, [name]: { ...inventory[name], [field]: value } };
+        setInventory(updated);
+        setIsDirty(true);
+    };
+
+    const handleDelete = (name) => {
+        if(!window.confirm(`Permanently remove ${name} from inventory?`)) return;
+        const updated = { ...inventory };
+        delete updated[name];
+        setInventory(updated);
+        setIsDirty(true);
+    };
+
+    const handleAdd = () => {
+        if (!newItem.name) return;
+        const updated = { ...inventory, [newItem.name]: { count: newItem.count, category: newItem.category, requiresTraining: newItem.requiresTraining } };
+        setInventory(updated);
+        setNewItem({ name: '', count: 1, category: 'general', requiresTraining: false });
+        setIsDirty(true);
+    };
+
+    const saveChanges = async () => {
+        try {
+            await setDoc(doc(db, "settings", "inventory_v2"), inventory);
+            setIsDirty(false);
+            alert("Inventory database updated.");
+        } catch (e) {
+            console.error(e);
+            alert("Save failed.");
+        }
+    };
+
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl max-w-5xl mx-auto">
+        <div className="bg-slate-950/50 p-6 border-b border-slate-800 flex justify-between items-center">
+            <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Box className="text-amber-400" /> Inventory Control</h2>
+                <p className="text-slate-400 text-sm">Manage asset availability and restrictions.</p>
+            </div>
+            {isDirty && (
+                <button onClick={saveChanges} className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 animate-pulse">
+                    <Save size={18} /> Save Changes
+                </button>
+            )}
+        </div>
+        
+        <div className="p-6 space-y-8">
+            {/* Add New Item */}
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex flex-wrap gap-4 items-end">
+                <div className="flex-grow"><label className="text-xs font-bold text-slate-500 uppercase">Item Name</label><input type="text" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" placeholder="e.g. GoPro Hero 10" /></div>
+                <div className="w-24"><label className="text-xs font-bold text-slate-500 uppercase">Qty</label><input type="number" value={newItem.count} onChange={e => setNewItem({...newItem, count: parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm" /></div>
+                <div className="w-32"><label className="text-xs font-bold text-slate-500 uppercase">Category</label><select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm"><option value="general">General</option><option value="film">Film</option><option value="photo">Photo</option><option value="culinary">Culinary</option></select></div>
+                <div className="flex items-center gap-2 pb-2"><input type="checkbox" checked={newItem.requiresTraining} onChange={e => setNewItem({...newItem, requiresTraining: e.target.checked})} className="w-4 h-4 rounded bg-slate-700 border-slate-600" /><label className="text-xs text-slate-300">Requires Training</label></div>
+                <button onClick={handleAdd} className="bg-cyan-600 hover:bg-cyan-500 text-white p-2.5 rounded-lg"><Plus size={20} /></button>
+            </div>
+
+            {/* Inventory List */}
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="border-b border-slate-700 text-xs uppercase text-slate-500 font-mono">
+                            <th className="p-3">Asset Name</th>
+                            <th className="p-3">Category</th>
+                            <th className="p-3">Training?</th>
+                            <th className="p-3 w-24">Stock</th>
+                            <th className="p-3 w-16"></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                        {Object.entries(inventory).sort().map(([name, item]) => (
+                            <tr key={name} className="hover:bg-slate-800/30 group">
+                                <td className="p-3 font-medium text-slate-200">{name}</td>
+                                <td className="p-3"><span className="px-2 py-0.5 rounded text-[10px] uppercase bg-slate-800 text-slate-400 border border-slate-700">{item.category}</span></td>
+                                <td className="p-3"><input type="checkbox" checked={item.requiresTraining} onChange={e => handleUpdate(name, 'requiresTraining', e.target.checked)} className="rounded bg-slate-900 border-slate-700" /></td>
+                                <td className="p-3"><input type="number" value={item.count} onChange={e => handleUpdate(name, 'count', parseInt(e.target.value))} className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-center text-white text-sm" /></td>
+                                <td className="p-3 text-right"><button onClick={() => handleDelete(name)} className="text-slate-600 hover:text-red-400 transition-colors"><Trash2 size={16} /></button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+      </div>
+    );
+  }
+
+  function AnalyticsView() {
+    return (
+        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-8 text-center">
+            <BarChart3 className="mx-auto text-emerald-500 mb-4" size={48} />
+            <h2 className="text-2xl font-bold text-white mb-2">Analytics Module</h2>
+            <p className="text-slate-400">Data visualization protocols are currently under development.</p>
+        </div>
+    );
+  }
+
+  // Add these alongside the functions above
+  const FilmForm = (props) => <FormContainer title="Film & TV" icon={Video} colorClass="bg-cyan-500" {...props}><div className="p-4 text-slate-400 text-center">Film inputs go here...</div></FormContainer>;
+  const GraphicDesignForm = (props) => <FormContainer title="Graphic Design" icon={PenTool} colorClass="bg-fuchsia-500" {...props}><div className="p-4 text-slate-400 text-center">Graphic inputs go here...</div></FormContainer>;
+  const BusinessForm = (props) => <FormContainer title="Business" icon={Briefcase} colorClass="bg-emerald-500" {...props}><div className="p-4 text-slate-400 text-center">Business inputs go here...</div></FormContainer>;
+  const CulinaryForm = (props) => <FormContainer title="Culinary" icon={Utensils} colorClass="bg-amber-500" {...props}><div className="p-4 text-slate-400 text-center">Culinary inputs go here...</div></FormContainer>;
+  const PhotoForm = (props) => <FormContainer title="Photography" icon={Camera} colorClass="bg-pink-500" {...props}><div className="p-4 text-slate-400 text-center">Photo inputs go here...</div></FormContainer>;
+  
+  function FeedbackView({ onCancel }) {
+      return (
+          <div className="max-w-xl mx-auto bg-slate-900 p-8 rounded-xl border border-slate-800 text-center">
+              <MessageSquare className="mx-auto text-cyan-400 mb-4" size={32} />
+              <h2 className="text-xl font-bold text-white mb-4">Feedback System</h2>
+              <p className="text-slate-400 mb-6">Contact erivers@salpointe.org for system bugs.</p>
+              <button onClick={onCancel} className="text-slate-400 hover:text-white underline">Return</button>
+          </div>
+      )
+  }
+
   function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser, blackouts = [] }) { 
       // ... (Same as before, needs to be included)
       const formRef = useRef(null);
