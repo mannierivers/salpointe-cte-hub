@@ -790,6 +790,243 @@ const App = () => {
       );
   }
 
+  // --------------------------------------------------------------------------
+  // MISSING COMPONENT DEFINITIONS (Paste this before export default App)
+  // --------------------------------------------------------------------------
+
+  // 1. ANALYTICS VIEW
+  function AnalyticsView() {
+    return (
+        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-12 text-center animate-fade-in">
+            <div className="inline-flex p-4 rounded-full bg-emerald-900/20 text-emerald-400 mb-6 shadow-[0_0_20px_rgba(52,211,153,0.3)]">
+                <BarChart3 size={48} />
+            </div>
+            <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">Analytics Module</h2>
+            <p className="text-slate-400 max-w-md mx-auto leading-relaxed">
+                Data visualization protocols are currently compiling. This module will track usage frequency, peak request times, and inventory depletion rates.
+            </p>
+        </div>
+    );
+  }
+
+  // 2. INVENTORY MANAGER (Stock Page)
+  function InventoryManager({ inventory, setInventory }) {
+    const [newItem, setNewItem] = useState({ name: '', count: 1, category: 'general', requiresTraining: false });
+    const [isDirty, setIsDirty] = useState(false);
+
+    const handleUpdate = (name, field, value) => {
+        const updated = { ...inventory, [name]: { ...inventory[name], [field]: value } };
+        setInventory(updated);
+        setIsDirty(true);
+    };
+
+    const handleDelete = (name) => {
+        if(!window.confirm(`Permanently remove ${name} from inventory?`)) return;
+        const updated = { ...inventory };
+        delete updated[name];
+        setInventory(updated);
+        setIsDirty(true);
+    };
+
+    const handleAdd = () => {
+        if (!newItem.name) return;
+        const updated = { ...inventory, [newItem.name]: { count: newItem.count, category: newItem.category, requiresTraining: newItem.requiresTraining } };
+        setInventory(updated);
+        setNewItem({ name: '', count: 1, category: 'general', requiresTraining: false });
+        setIsDirty(true);
+    };
+
+    const saveChanges = async () => {
+        try {
+            await setDoc(doc(db, "settings", "inventory_v2"), inventory);
+            setIsDirty(false);
+            alert("Inventory database updated successfully.");
+        } catch (e) {
+            console.error(e);
+            alert("Failed to save changes.");
+        }
+    };
+
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl animate-fade-in">
+        <div className="bg-slate-950/50 p-6 border-b border-slate-800 flex justify-between items-center">
+            <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Box className="text-amber-400" /> Inventory Control</h2>
+                <p className="text-slate-400 text-sm">Manage asset availability and restrictions.</p>
+            </div>
+            {isDirty && (
+                <button onClick={saveChanges} className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 animate-pulse shadow-[0_0_15px_rgba(217,119,6,0.5)]">
+                    <Save size={18} /> Save Changes
+                </button>
+            )}
+        </div>
+        
+        <div className="p-6 space-y-6">
+            {/* Add New Item */}
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex flex-wrap gap-4 items-end">
+                <div className="flex-grow min-w-[200px]"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Item Name</label><input type="text" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" /></div>
+                <div className="w-20"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Qty</label><input type="number" value={newItem.count} onChange={e => setNewItem({...newItem, count: parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" /></div>
+                <div className="w-32"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Category</label><select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"><option value="general">General</option><option value="film">Film</option><option value="photo">Photo</option><option value="culinary">Culinary</option></select></div>
+                <div className="flex items-center gap-2 pb-2"><input type="checkbox" checked={newItem.requiresTraining} onChange={e => setNewItem({...newItem, requiresTraining: e.target.checked})} className="w-4 h-4 rounded bg-slate-700 border-slate-600 accent-cyan-500" /><label className="text-xs text-slate-300">Training?</label></div>
+                <button onClick={handleAdd} className="bg-cyan-600 hover:bg-cyan-500 text-white p-2.5 rounded-lg transition-colors"><Plus size={20} /></button>
+            </div>
+
+            {/* Inventory List */}
+            <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-slate-900 border-b border-slate-800 text-xs uppercase text-slate-500 font-mono">
+                            <th className="p-3">Asset Name</th>
+                            <th className="p-3">Category</th>
+                            <th className="p-3">Training Req.</th>
+                            <th className="p-3 w-24">Stock</th>
+                            <th className="p-3 w-16"></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 bg-slate-950/30">
+                        {Object.entries(inventory).sort().map(([name, item]) => (
+                            <tr key={name} className="hover:bg-slate-800/50 transition-colors">
+                                <td className="p-3 font-medium text-slate-200">{name}</td>
+                                <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] uppercase border font-bold ${item.category === 'film' ? 'text-cyan-400 border-cyan-900 bg-cyan-950/30' : item.category === 'photo' ? 'text-pink-400 border-pink-900 bg-pink-950/30' : 'text-slate-400 border-slate-700 bg-slate-800'}`}>{item.category}</span></td>
+                                <td className="p-3"><input type="checkbox" checked={item.requiresTraining} onChange={e => handleUpdate(name, 'requiresTraining', e.target.checked)} className="rounded bg-slate-900 border-slate-700 accent-cyan-500" /></td>
+                                <td className="p-3"><input type="number" value={item.count} onChange={e => handleUpdate(name, 'count', parseInt(e.target.value))} className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-center text-white text-sm focus:border-cyan-500 outline-none" /></td>
+                                <td className="p-3 text-right"><button onClick={() => handleDelete(name)} className="text-slate-600 hover:text-red-400 transition-colors"><Trash2 size={16} /></button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. FEEDBACK VIEW
+  function FeedbackView({ setSubmitted, onCancel }) {
+      return (
+          <FormContainer title="System Feedback" icon={MessageSquare} colorClass="bg-slate-500" setSubmitted={setSubmitted} onCancel={onCancel}>
+             <div className="space-y-4">
+                 <div className="p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-lg text-sm text-cyan-200">
+                    <p>Encountered a bug or have a feature request? Let the development team know directly.</p>
+                 </div>
+                 <div>
+                    <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Message Type</label>
+                    <select name="feedbackType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none">
+                        <option>Bug Report</option>
+                        <option>Feature Request</option>
+                        <option>General Inquiry</option>
+                    </select>
+                 </div>
+                 <div>
+                    <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Details</label>
+                    <textarea name="details" rows={5} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe the issue..." required></textarea>
+                 </div>
+             </div>
+          </FormContainer>
+      );
+  }
+
+  // 4. HELPER: INVENTORY SELECTOR (Used by Film/Photo forms)
+  function InventorySelector({ inventory, category }) {
+      const filteredItems = Object.entries(inventory).filter(([_, item]) => item.category === category);
+      return (
+          <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800 mt-4">
+              <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 border-b border-slate-800 pb-2">Equipment Request</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {filteredItems.map(([name, item]) => (
+                      <div key={name} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded hover:border-slate-600 transition-colors">
+                          <div className="flex flex-col">
+                              <span className="text-sm text-slate-200 font-medium">{name}</span>
+                              {item.requiresTraining && <span className="text-[10px] text-amber-500 flex items-center gap-1"><AlertCircle size={10} /> Training Req.</span>}
+                          </div>
+                          <input type="number" name={`gear_${name}`} min="0" max="5" placeholder="0" className="w-12 bg-slate-950 border border-slate-700 rounded p-1 text-center text-white text-sm focus:border-cyan-500 outline-none" />
+                      </div>
+                  ))}
+              </div>
+          </div>
+      );
+  }
+
+  // 5. FILM FORM
+  function FilmForm(props) {
+      return (
+          <FormContainer title="Film & TV" icon={Video} colorClass="bg-cyan-400" {...props}>
+              <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                  </div>
+                  <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Shoot Location</label><input type="text" name="location" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Gym, Field, Off-campus" required /></div>
+                  <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Details</label><textarea name="details" rows={3} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe the shoot..." required /></div>
+                  
+                  <InventorySelector inventory={props.inventory} category="film" />
+              </div>
+          </FormContainer>
+      );
+  }
+
+  // 6. PHOTO FORM
+  function PhotoForm(props) {
+      return (
+          <FormContainer title="Photography" icon={Camera} colorClass="bg-pink-400" {...props}>
+               <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                  </div>
+                  <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event / Subject</label><input type="text" name="eventSubject" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Senior Portraits" required /></div>
+                  
+                  <InventorySelector inventory={props.inventory} category="photo" />
+              </div>
+          </FormContainer>
+      );
+  }
+
+  // 7. GRAPHIC DESIGN FORM
+  function GraphicDesignForm(props) {
+      return (
+          <FormContainer title="Graphic Design" icon={PenTool} colorClass="bg-fuchsia-400" {...props}>
+              <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Deadline</label><input type="date" name="deadline" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Format</label><select name="format" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Digital (Social Media/Web)</option><option>Print (Poster/Flyer)</option><option>Apparel</option><option>Logo / Branding</option></select></div>
+                  </div>
+                  <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Design Brief</label><textarea name="brief" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe colors, style, text required..." required /></div>
+              </div>
+          </FormContainer>
+      );
+  }
+
+  // 8. BUSINESS FORM
+  function BusinessForm(props) {
+      return (
+          <FormContainer title="Business & Startup" icon={Briefcase} colorClass="bg-emerald-400" {...props}>
+              <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Meeting Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Service Type</label><select name="serviceType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Consultation</option><option>Business Plan Review</option><option>Marketing Strategy</option><option>Pitch Deck Prep</option></select></div>
+                  </div>
+                  <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Objective</label><textarea name="objective" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="What are your goals?" required /></div>
+              </div>
+          </FormContainer>
+      );
+  }
+
+  // 9. CULINARY FORM
+  function CulinaryForm(props) {
+      return (
+          <FormContainer title="Culinary Arts" icon={Utensils} colorClass="bg-amber-400" {...props}>
+              <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Headcount</label><input type="number" name="headcount" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. 50" required /></div>
+                  </div>
+                  <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Menu Requirements</label><textarea name="menu" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Dietary restrictions, food preferences..." required /></div>
+              </div>
+          </FormContainer>
+      );
+  }
+
 };
 
 export default App;
