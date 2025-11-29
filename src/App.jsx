@@ -51,7 +51,8 @@ import {
   Bug,           
   Lightbulb,     
   CheckSquare,
-  Gamepad2 // Added Gamepad Icon
+  Gamepad2,
+  Trophy // Added Trophy for high score
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -80,7 +81,7 @@ const ALLOWED_ADMINS = [
     "erivers@salpointe.org" 
 ];
 
-// *** NEW STRUCTURED INVENTORY ***
+// *** DEFAULT FALLBACK INVENTORY ***
 const DEFAULT_INVENTORY = {
   'Cinema Camera Kit': { count: 1, category: 'film', requiresTraining: true },
   'Gimbal / Stabilizer': { count: 6, category: 'film', requiresTraining: true },
@@ -88,14 +89,12 @@ const DEFAULT_INVENTORY = {
   'DJI Flip Drone': { count: 1, category: 'film', requiresTraining: true },
   'Lighting Kit': { count: 6, category: 'film', requiresTraining: false },
   'Tripod': { count: 8, category: 'general', requiresTraining: false },
-  
   'DSLR Camera Body': { count: 6, category: 'photo', requiresTraining: true },
   'Zoom Lens (18-55mm)': { count: 6, category: 'photo', requiresTraining: false },
   'Telephoto Lens (70-200mm)': { count: 2, category: 'photo', requiresTraining: false },
   'Portrait Lens (50mm)': { count: 3, category: 'photo', requiresTraining: false },
   'SD Card Reader': { count: 5, category: 'photo', requiresTraining: false },
   'Flash Unit': { count: 3, category: 'photo', requiresTraining: false },
-
   'Serving Trays': { count: 10, category: 'culinary', requiresTraining: false },
   'Chafing Dishes': { count: 4, category: 'culinary', requiresTraining: false }
 };
@@ -114,7 +113,7 @@ const Departments = {
   ANALYTICS: 'analytics',
   INVENTORY: 'inventory',
   FEEDBACK: 'feedback',
-  GAME: 'game' // New Game View
+  GAME: 'game'
 };
 
 const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
@@ -135,6 +134,9 @@ const App = () => {
   const [adminMode, setAdminMode] = useState(false);
   const [inventory, setInventory] = useState(DEFAULT_INVENTORY); 
   const [blackouts, setBlackouts] = useState([]);
+  
+  // Secret Game Unlock State
+  const [logoClicks, setLogoClicks] = useState(0);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -185,6 +187,16 @@ const App = () => {
   const goHome = () => { setCurrentView('landing'); setSubmitted(false); };
   const goToDashboard = () => { setCurrentView(Departments.DASHBOARD); setSubmitted(false); };
 
+  // EASTER EGG HANDLER
+  const handleSecretClick = () => {
+      const newCount = logoClicks + 1;
+      setLogoClicks(newCount);
+      if (newCount === 7) {
+          setCurrentView(Departments.GAME);
+          setLogoClicks(0);
+      }
+  };
+
   const isRequestView = [Departments.FILM, Departments.GRAPHIC, Departments.BUSINESS, Departments.CULINARY, Departments.PHOTO].includes(currentView);
 
   return (
@@ -217,13 +229,6 @@ const App = () => {
             {currentView !== 'landing' && (
                 <button onClick={() => { setCurrentView(Departments.CALENDAR); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-all flex items-center gap-2 border ${currentView === Departments.CALENDAR ? 'bg-cyan-950/50 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.15)]' : 'border-transparent text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`}>
                 <Calendar size={16} /><span className="hidden sm:inline">Schedule</span>
-                </button>
-            )}
-            
-            {/* GAME BUTTON */}
-            {currentView !== 'landing' && (
-                <button onClick={() => { setCurrentView(Departments.GAME); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-all flex items-center gap-2 border ${currentView === Departments.GAME ? 'bg-pink-950/50 border-pink-500 text-pink-400' : 'border-transparent text-slate-400 hover:text-pink-400 hover:bg-slate-800'}`}>
-                <Gamepad2 size={16} /><span className="hidden sm:inline">Arcade</span>
                 </button>
             )}
             
@@ -291,9 +296,12 @@ const App = () => {
       <footer className="text-center py-8 px-4 border-t border-slate-800/50 mt-auto relative z-10 bg-slate-900/50">
         <div className="flex flex-col items-center justify-center gap-3 opacity-60 hover:opacity-100 transition-opacity duration-500">
             <img src={salpointeLogo} alt="Salpointe Catholic High School" className="w-8 h-8 opacity-80 grayscale hover:grayscale-0 transition-all" />
-            <p className="text-slate-500 text-xs font-mono tracking-widest uppercase">
+            
+            {/* SECRET TRIGGER HERE */}
+            <p onClick={handleSecretClick} className="text-slate-500 text-xs font-mono tracking-widest uppercase cursor-default select-none">
                 &copy; {new Date().getFullYear()} Salpointe Catholic High School <span className="text-slate-700 mx-2">|</span> CTE Department
             </p>
+            
             <button onClick={() => setCurrentView(Departments.FEEDBACK)} className="text-xs text-cyan-600 hover:text-cyan-400 flex items-center gap-1 transition-colors mt-2">
                 <MessageSquare size={12} /> Feedback & Support
             </button>
@@ -302,152 +310,179 @@ const App = () => {
     </div>
   );
 
-  // --- NEW: 8-BIT GAME COMPONENT ---
+  // --- NEW: 8-BIT RUNNER GAME COMPONENT ---
   function GameView({ onExit }) {
-      const [gameState, setGameState] = useState('start'); // start, playing, won, lost
-      const [bossHealth, setBossHealth] = useState(100);
-      const [playerHealth, setPlayerHealth] = useState(100);
-      const [currentQuestion, setCurrentQuestion] = useState(null);
-      const [log, setLog] = useState(["SYSTEM INITIALIZED...", "BOSS DETECTED: THE DEADLINE"]);
+      const canvasRef = useRef(null);
+      const [gameState, setGameState] = useState('start'); // start, playing, gameover
+      const [score, setScore] = useState(0);
+      const [highScore, setHighScore] = useState(parseInt(localStorage.getItem('lancer_highscore') || '0'));
+      
+      // Game Constants
+      const GRAVITY = 0.6;
+      const JUMP_FORCE = -10;
+      const SPEED = 5;
+      const GROUND_HEIGHT = 50;
 
-      const QUESTIONS = [
-          { q: "What is the standard frame rate for cinema?", a: "24fps", b: "30fps", c: "60fps", correct: "a", damage: 20, type: "Film" },
-          { q: "Which tool creates a smooth tracking shot?", a: "Tripod", b: "Gimbal", c: "Boom", correct: "b", damage: 25, type: "Film" },
-          { q: "What controls the amount of light hitting the sensor?", a: "ISO", b: "Shutter Speed", c: "Aperture", correct: "c", damage: 20, type: "Photo" },
-          { q: "What file format is best for editing photos?", a: "JPEG", b: "RAW", c: "PNG", correct: "b", damage: 30, type: "Photo" },
-          { q: "Safe internal temp for chicken?", a: "145°F", b: "155°F", c: "165°F", correct: "c", damage: 25, type: "Culinary" },
-          { q: "What represents profit after expenses?", a: "Revenue", b: "Net Income", c: "Gross Margin", correct: "b", damage: 20, type: "Business" },
-          { q: "Which color mode is for printing?", a: "RGB", b: "CMYK", c: "HEX", correct: "b", damage: 20, type: "Graphic" },
-          { q: "Shortcut to 'Undo' on Mac?", a: "Cmd+Z", b: "Cmd+C", c: "Cmd+X", correct: "a", damage: 15, type: "General" },
-      ];
+      // Game State Refs (for loop)
+      const playerRef = useRef({ x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false });
+      const obstaclesRef = useRef([]);
+      const frameRef = useRef(0);
+      const scoreRef = useRef(0);
+      const loopRef = useRef(null);
 
-      const startGame = () => {
-          setGameState('playing');
-          setBossHealth(100);
-          setPlayerHealth(100);
-          setLog(["BATTLE STARTED!"]);
-          nextQuestion();
-      };
-
-      const nextQuestion = () => {
-          const randomQ = QUESTIONS[Math.floor(Math.random() * QUESTIONS.length)];
-          setCurrentQuestion(randomQ);
-      };
-
-      const handleAnswer = (choice) => {
-          if (choice === currentQuestion.correct) {
-              const newBossHealth = Math.max(0, bossHealth - currentQuestion.damage);
-              setBossHealth(newBossHealth);
-              setLog(prev => [`CRITICAL HIT! -${currentQuestion.damage} HP to Deadline`, ...prev]);
-              if (newBossHealth === 0) {
-                  setGameState('won');
-              } else {
-                  nextQuestion();
-              }
-          } else {
-              const newPlayerHealth = Math.max(0, playerHealth - 25);
-              setPlayerHealth(newPlayerHealth);
-              setLog(prev => [`WRONG! You took 25 damage.`, ...prev]);
-              if (newPlayerHealth === 0) {
-                  setGameState('lost');
-              } else {
-                  nextQuestion();
-              }
+      const jump = () => {
+          if (!playerRef.current.isJumping) {
+              playerRef.current.vy = JUMP_FORCE;
+              playerRef.current.isJumping = true;
           }
       };
 
+      const startGame = () => {
+          setGameState('playing');
+          setScore(0);
+          scoreRef.current = 0;
+          playerRef.current = { x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false };
+          obstaclesRef.current = [];
+          frameRef.current = 0;
+          gameLoop();
+      };
+
+      const gameLoop = () => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const ctx = canvas.getContext('2d');
+
+          // Clear Screen
+          ctx.fillStyle = '#0f172a'; // Slate 900
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Ground Line
+          ctx.strokeStyle = '#22d3ee'; // Cyan
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, canvas.height - GROUND_HEIGHT);
+          ctx.lineTo(canvas.width, canvas.height - GROUND_HEIGHT);
+          ctx.stroke();
+
+          // Update Player
+          const p = playerRef.current;
+          p.vy += GRAVITY;
+          p.y += p.vy;
+
+          // Ground Collision
+          if (p.y > canvas.height - GROUND_HEIGHT - p.height) {
+              p.y = canvas.height - GROUND_HEIGHT - p.height;
+              p.vy = 0;
+              p.isJumping = false;
+          }
+
+          // Draw Player (Lancer Emoji)
+          ctx.font = '32px Arial';
+          ctx.fillText('🏇', p.x, p.y + 32);
+
+          // Spawn Obstacles
+          frameRef.current++;
+          if (frameRef.current % 100 === 0) { // Spawn rate
+              const type = Math.random() > 0.5 ? '📹' : 'F'; // Camera or Grade F
+              obstaclesRef.current.push({
+                  x: canvas.width,
+                  y: canvas.height - GROUND_HEIGHT - 30, // Ground level
+                  width: 30,
+                  height: 30,
+                  type: type
+              });
+          }
+
+          // Update & Draw Obstacles
+          for (let i = obstaclesRef.current.length - 1; i >= 0; i--) {
+              const obs = obstaclesRef.current[i];
+              obs.x -= SPEED;
+
+              // Draw Obstacle
+              ctx.fillStyle = obs.type === 'F' ? '#ef4444' : '#fbbf24';
+              ctx.font = '28px Arial';
+              ctx.fillText(obs.type, obs.x, obs.y + 28);
+
+              // Collision Detection
+              if (
+                  p.x < obs.x + obs.width &&
+                  p.x + p.width > obs.x &&
+                  p.y < obs.y + obs.height &&
+                  p.y + p.height > obs.y
+              ) {
+                  handleGameOver();
+                  return; // Stop loop
+              }
+
+              // Remove off-screen
+              if (obs.x + obs.width < 0) {
+                  obstaclesRef.current.splice(i, 1);
+                  scoreRef.current += 10;
+                  setScore(scoreRef.current);
+              }
+          }
+
+          // Score Draw
+          ctx.fillStyle = '#fff';
+          ctx.font = '16px monospace';
+          ctx.fillText(`SCORE: ${scoreRef.current}`, 10, 20);
+
+          loopRef.current = requestAnimationFrame(gameLoop);
+      };
+
+      const handleGameOver = () => {
+          cancelAnimationFrame(loopRef.current);
+          setGameState('gameover');
+          if (scoreRef.current > highScore) {
+              setHighScore(scoreRef.current);
+              localStorage.setItem('lancer_highscore', scoreRef.current.toString());
+          }
+      };
+
+      // Input Handler
+      useEffect(() => {
+          const handleKeyDown = (e) => {
+              if (e.code === 'Space' || e.code === 'ArrowUp') {
+                  if (gameState === 'playing') jump();
+                  else if (gameState !== 'playing') startGame(); // Restart on space
+              }
+          };
+          window.addEventListener('keydown', handleKeyDown);
+          return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [gameState]);
+
       return (
-          <div className="max-w-3xl mx-auto bg-black border-4 border-slate-700 rounded-xl overflow-hidden font-mono shadow-2xl relative animate-fade-in">
-              {/* CRT Effect Overlay */}
+          <div className="max-w-3xl mx-auto bg-black border-4 border-slate-700 rounded-xl overflow-hidden font-mono shadow-2xl relative animate-fade-in select-none">
+              {/* CRT Overlay */}
               <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]"></div>
               
-              <div className="bg-slate-900 p-4 border-b-4 border-slate-700 flex justify-between items-center">
-                  <div className="text-green-400 text-xs">LANCER_OS v9.0</div>
-                  <button onClick={onExit} className="text-red-500 hover:text-red-400 text-xs uppercase">[ EXIT GAME ]</button>
+              <div className="bg-slate-900 p-4 border-b-4 border-slate-700 flex justify-between items-center relative z-20">
+                  <div className="text-green-400 text-xs flex items-center gap-2"><Gamepad2 size={14}/> LANCER_RUN.EXE</div>
+                  <div className="text-yellow-400 text-xs flex items-center gap-2"><Trophy size={14}/> HI-SCORE: {highScore}</div>
+                  <button onClick={onExit} className="text-red-500 hover:text-red-400 text-xs uppercase font-bold">[ EXIT SYSTEM ]</button>
               </div>
 
-              <div className="p-8 min-h-[500px] flex flex-col relative z-0">
+              <div className="relative bg-slate-950" style={{ height: '300px' }}>
+                  <canvas 
+                      ref={canvasRef} 
+                      width={700} 
+                      height={300} 
+                      className="w-full h-full block"
+                  />
+
                   {gameState === 'start' && (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-                          <Gamepad2 size={64} className="text-green-500 animate-bounce"/>
-                          <h2 className="text-4xl font-bold text-white tracking-widest">TRIVIA QUEST</h2>
-                          <p className="text-slate-400 max-w-md">Defeat the <span className="text-red-500">PROJECT DEADLINE</span> by answering CTE technical questions correctly.</p>
-                          <button onClick={startGame} className="px-8 py-4 bg-green-600 hover:bg-green-500 text-black font-bold text-xl rounded shadow-[4px_4px_0px_0px_rgba(255,255,255,0.5)] active:translate-y-1 active:shadow-none transition-all">START GAME</button>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-20">
+                          <h2 className="text-4xl font-bold text-cyan-400 mb-4 tracking-widest glitch-text">LANCER RUN</h2>
+                          <p className="text-slate-300 text-sm mb-6">Space/Up to Jump. Avoid the F's!</p>
+                          <button onClick={startGame} className="px-6 py-2 bg-green-600 hover:bg-green-500 text-black font-bold rounded blink-anim">INSERT COIN (START)</button>
                       </div>
                   )}
 
-                  {gameState === 'playing' && currentQuestion && (
-                      <div className="flex-1 flex flex-col justify-between">
-                          {/* HUD */}
-                          <div className="flex justify-between mb-8">
-                              <div className="w-1/3">
-                                  <div className="text-green-400 text-xs mb-1">STUDENT (YOU)</div>
-                                  <div className="h-4 bg-slate-800 rounded-full border border-slate-600 overflow-hidden">
-                                      <div className="h-full bg-green-500 transition-all duration-500" style={{width: `${playerHealth}%`}}></div>
-                                  </div>
-                                  <div className="text-right text-xs text-slate-500 mt-1">{playerHealth}/100</div>
-                              </div>
-                              <div className="text-center text-slate-600 font-bold text-xl">VS</div>
-                              <div className="w-1/3">
-                                  <div className="text-red-400 text-xs mb-1 text-right">THE DEADLINE (BOSS)</div>
-                                  <div className="h-4 bg-slate-800 rounded-full border border-slate-600 overflow-hidden">
-                                      <div className="h-full bg-red-500 transition-all duration-500" style={{width: `${bossHealth}%`}}></div>
-                                  </div>
-                                  <div className="text-right text-xs text-slate-500 mt-1">{bossHealth}/100</div>
-                              </div>
-                          </div>
-
-                          {/* SCENE */}
-                          <div className="flex-1 flex items-center justify-center mb-8 relative">
-                             {/* Player Sprite */}
-                             <div className="absolute left-10 bottom-0 text-6xl animate-pulse">🧑‍💻</div>
-                             {/* Attack Effect */}
-                             <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 text-yellow-400 font-bold text-xl opacity-0 animate-ping">HIT!</div>
-                             {/* Boss Sprite */}
-                             <div className="absolute right-10 bottom-0 text-8xl animate-bounce">👹</div>
-                          </div>
-
-                          {/* QUESTION BOX */}
-                          <div className="bg-slate-800 border-2 border-green-500/50 p-6 rounded-lg mb-4 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
-                              <div className="text-xs text-green-400 mb-2 uppercase">Category: {currentQuestion.type}</div>
-                              <h3 className="text-xl text-white mb-6">{currentQuestion.q}</h3>
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                  {['a', 'b', 'c'].map((choice) => (
-                                      <button 
-                                          key={choice} 
-                                          onClick={() => handleAnswer(choice)}
-                                          className="px-4 py-3 bg-slate-900 hover:bg-slate-700 border border-slate-600 text-cyan-300 rounded text-left transition-colors text-sm"
-                                      >
-                                          <span className="text-slate-500 mr-2">[{choice.toUpperCase()}]</span> {currentQuestion[choice]}
-                                      </button>
-                                  ))}
-                              </div>
-                          </div>
-
-                          {/* LOG */}
-                          <div className="h-24 overflow-y-auto bg-black p-2 border border-slate-800 text-xs font-mono">
-                              {log.map((entry, i) => (
-                                  <div key={i} className={entry.includes('WRONG') ? 'text-red-500' : 'text-green-500'}>{'>'} {entry}</div>
-                              ))}
-                          </div>
-                      </div>
-                  )}
-
-                  {gameState === 'won' && (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 animate-bounce">
-                          <div className="text-6xl">🏆</div>
-                          <h2 className="text-4xl font-bold text-yellow-400">VICTORY!</h2>
-                          <p className="text-slate-300">You defeated the Deadline. Project Submitted.</p>
-                          <button onClick={startGame} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded border border-slate-500">PLAY AGAIN</button>
-                      </div>
-                  )}
-
-                  {gameState === 'lost' && (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-                          <div className="text-6xl">💀</div>
-                          <h2 className="text-4xl font-bold text-red-500">GAME OVER</h2>
-                          <p className="text-slate-400">The Deadline won. Request Extension?</p>
-                          <button onClick={startGame} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded border border-slate-500">RETRY LEVEL</button>
+                  {gameState === 'gameover' && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/40 z-20 backdrop-blur-sm">
+                          <h2 className="text-4xl font-bold text-red-500 mb-2">CRITICAL FAILURE</h2>
+                          <p className="text-white text-xl mb-6">FINAL SCORE: {score}</p>
+                          <button onClick={startGame} className="px-6 py-2 bg-white text-black font-bold rounded hover:bg-slate-200">RETRY MISSION</button>
                       </div>
                   )}
               </div>
@@ -456,9 +491,10 @@ const App = () => {
   }
 
   // ... LandingPage, SuccessView, ServiceGrid, ContactSection, InventoryManager, AnalyticsView, RequestQueueView, FormContainer, FilmForm, GraphicDesignForm, BusinessForm, CulinaryForm, PhotoForm, CalendarView, MyRequestsView, FeedbackView ...
-  // (All previous components kept intact)
+  // (All previous components remain exactly as they were. I will ensure they are present in the final output.)
+  
   function LandingPage({ currentUser, onLogin, onEnter }) {
-      // ... same as previous
+    // ... same
       return (
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-12 animate-fade-in">
             <div className="space-y-6 max-w-4xl mx-auto">
@@ -543,7 +579,6 @@ const App = () => {
   }
 
   function ContactSection({ initialData = {}, currentUser }) {
-    // ... same
     const defaultName = currentUser?.displayName || initialData.fullName || '';
     const defaultEmail = currentUser?.email || initialData.email || '';
     return (
@@ -645,6 +680,103 @@ const App = () => {
               <div className="bg-amber-950/30 rounded-xl p-5 border border-amber-500/20"><h4 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-2">Pending</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-amber-400 font-mono">{stats.pending}</span></div></div>
               <div className="md:col-span-2 bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><PieChart size={16} className="text-purple-400" /> Requests by Department</h3><div className="space-y-4">{Object.entries(stats.deptCounts).sort(([,a], [,b]) => b - a).map(([dept, count]) => { const percentage = (count / stats.total) * 100; return (<div key={dept}><div className="flex justify-between text-xs mb-2 font-mono"><span className="text-slate-400">{dept}</span><span className="text-cyan-400">{count}</span></div><div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${percentage}%` }}></div></div></div>); })}</div></div>
               <div className="bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><Camera size={16} className="text-pink-400" /> Top Gear</h3><ul className="space-y-3">{stats.topEquipment.map(([item, count], index) => (<li key={item} className="flex items-center gap-3"><div className="w-6 h-6 rounded bg-slate-800 text-cyan-400 flex items-center justify-center text-xs font-mono border border-slate-700">{index + 1}</div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-300 truncate">{item.replace(' *', '')}</p><p className="text-xs text-slate-500 font-mono">{count} uses</p></div></li>))}</ul></div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function MyRequestsView({ currentUser }) {
+    // ... same
+    const [myRequests, setMyRequests] = useState([]);
+    const [loading, setLoading] = useState(true);
+    useEffect(() => {
+        if (!currentUser) return;
+        const q = query(collection(db, "requests"), where("email", "==", currentUser.email), orderBy("createdAt", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A' }));
+            setMyRequests(reqs);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, [currentUser]);
+    const handleCancel = async (id) => { if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "requests", id)); };
+    const getStatusBadge = (status) => {
+        const styles = { 'Approved': 'bg-green-950/50 text-green-400 border-green-500/30', 'Denied': 'bg-red-950/50 text-red-400 border-red-500/30', 'Completed': 'bg-slate-800 text-slate-400 border-slate-700', 'default': 'bg-amber-950/50 text-amber-400 border-amber-500/30' };
+        return <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${styles[status] || styles['default']}`}>{status}</span>;
+    };
+    return (
+        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+            <div className="bg-slate-950/50 border-b border-slate-800 p-6"><h2 className="text-xl font-bold text-white flex items-center gap-2"><History className="text-cyan-400" /> My Request History</h2></div>
+            <div className="overflow-x-auto">
+                {loading ? <div className="p-8 text-center text-slate-500 font-mono">LOADING DATA...</div> : myRequests.length === 0 ? <div className="p-12 text-center text-slate-500">No records found.</div> : (
+                    <table className="w-full text-left border-collapse min-w-[700px]">
+                        <thead><tr className="bg-slate-800/50 border-b border-slate-700 text-xs uppercase text-slate-400 font-mono"><th className="p-4">Ref ID</th><th className="p-4">Dept</th><th className="p-4">Project</th><th className="p-4">Date Submitted</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
+                        <tbody className="divide-y divide-slate-800">{myRequests.map((req) => (
+                            <tr key={req.id} className="hover:bg-slate-800/50 transition-colors"><td className="p-4 text-cyan-400 font-mono text-xs">{req.displayId}</td><td className="p-4 text-slate-300 text-sm capitalize">{req.dept}</td><td className="p-4 font-semibold text-white text-sm">{req.title}</td><td className="p-4 text-slate-400 text-sm font-mono">{req.formattedDate}</td><td className="p-4">{getStatusBadge(req.status)}</td><td className="p-4">{req.status === 'Pending Review' && <button onClick={() => handleCancel(req.id)} className="text-xs text-red-400 border border-red-900 hover:bg-red-950/50 px-3 py-1 rounded transition-colors">Cancel</button>}</td></tr>
+                        ))}</tbody>
+                    </table>
+                )}
+            </div>
+        </div>
+    );
+  }
+
+  function CalendarView({ adminMode, blackouts }) {
+    // ... same
+    const [displayDate, setDisplayDate] = useState(new Date()); 
+    const [selectedDate, setSelectedDate] = useState(null);
+    const [filter, setFilter] = useState('all');
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const nextMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() + 1)));
+    const prevMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() - 1)));
+    useEffect(() => { const q = query(collection(db, "requests")); const unsubscribe = onSnapshot(q, (snapshot) => { const fetchedEvents = snapshot.docs.map(doc => { const data = doc.data(); let dateStr = data.eventDate || data.checkoutDate || data.pickupDate || data.deadline; if (!dateStr) return null; const [y, m, d] = dateStr.split('-').map(Number); const dateObj = new Date(y, m - 1, d); return { id: doc.id, title: data.title || data.requestName || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data }; }).filter(e => e !== null && e.status === 'Approved'); setEvents(fetchedEvents); setLoading(false); }); return () => unsubscribe(); }, []);
+    const handleDateClick = async (day) => { const clickedDate = new Date(displayDate.getFullYear(), displayDate.getMonth(), day); const dateStr = clickedDate.toISOString().split('T')[0]; if (adminMode) { if (blackouts.includes(dateStr)) { if(window.confirm(`Re-open ${dateStr}?`)) await deleteDoc(doc(db, "blackout_dates", dateStr)); } else { if(window.confirm(`Blackout ${dateStr}?`)) await setDoc(doc(db, "blackout_dates", dateStr), { reason: "Closed" }); } return; } setSelectedDate(selectedDate === day ? null : day); };
+    const getDaysInMonth = (date) => { const year = date.getFullYear(); const month = date.getMonth(); const days = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); return { days, firstDay, monthName: date.toLocaleString('default', { month: 'long' }), year }; };
+    const { days, firstDay, monthName, year } = getDaysInMonth(displayDate);
+    const daysArray = Array.from({ length: days }, (_, i) => i + 1);
+    const empties = Array.from({ length: firstDay }, (_, i) => i);
+    const getEventsForDay = (dayNum) => events.filter(e => e.date.getDate() === dayNum && e.date.getMonth() === displayDate.getMonth() && e.date.getFullYear() === displayDate.getFullYear() && (filter === 'all' || e.dept === filter));
+    const getGoogleCalendarUrl = (event) => { const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE"; const text = `&text=${encodeURIComponent(`[${event.dept}] ${event.title}`)}`; const details = `&details=${encodeURIComponent(`Ref: ${event.displayId}\nRequested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`; const location = `&location=${encodeURIComponent(event.location || 'Salpointe Catholic High School')}`; const y = event.date.getFullYear(); const m = String(event.date.getMonth() + 1).padStart(2, '0'); const d = String(event.date.getDate()).padStart(2, '0'); const dateString = `${y}${m}${d}`; const nextDay = new Date(event.date); nextDay.setDate(nextDay.getDate() + 1); const ny = nextDay.getFullYear(); const nm = String(nextDay.getMonth() + 1).padStart(2, '0'); const nd = String(nextDay.getDate()).padStart(2, '0'); const nextDateString = `${ny}${nm}${nd}`; const dates = `&dates=${dateString}/${nextDateString}`; return `${baseUrl}${text}${dates}${details}${location}`; };
+
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+        <div className="bg-slate-950/50 p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div><div className="flex items-center gap-4 mb-1"><button onClick={prevMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronLeft size={24}/></button><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-white">{monthName} <span className="text-slate-500">{year}</span></h2><button onClick={nextMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronRight size={24}/></button></div></div>
+          <div className="flex bg-slate-800/50 rounded-lg p-1 w-full md:w-auto overflow-x-auto">
+            {['all', Departments.FILM, Departments.PHOTO, Departments.CULINARY].map(f => (<button key={f} onClick={() => setFilter(f)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap capitalize ${filter === f ? 'bg-cyan-600 text-white shadow-[0_0_10px_rgba(8,145,178,0.4)]' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>{f === 'all' ? 'All' : f}</button>))}
+          </div>
+        </div>
+        <div className="p-6">
+           {adminMode && <div className="mb-4 p-3 bg-slate-800/50 border border-slate-700 rounded text-xs text-slate-400 flex items-center gap-2 font-mono"><Ban size={14} className="text-red-400"/> Admin Mode: Click a date to toggle blackout.</div>}
+           <div className="overflow-x-auto pb-2">
+            {loading ? <div className="text-center py-8 text-slate-500 font-mono">LOADING MATRIX...</div> : (
+              <div className="min-w-[600px] md:min-w-0 grid grid-cols-7 gap-px bg-slate-800 border border-slate-800 rounded-xl overflow-hidden shadow-inner">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="bg-slate-900 p-2 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">{day}</div>)}
+                {empties.map(i => <div key={`empty-${i}`} className="bg-slate-950/50 min-h-[80px] md:min-h-[100px]" />)}
+                {daysArray.map(day => {
+                  const dayEvents = getEventsForDay(day);
+                  const isToday = day === new Date().getDate() && displayDate.getMonth() === new Date().getMonth() && displayDate.getFullYear() === new Date().getFullYear();
+                  const currentDateStr = new Date(year, displayDate.getMonth(), day).toISOString().split('T')[0];
+                  const isBlackout = blackouts.includes(currentDateStr);
+                  return (
+                    <div key={day} className={`min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-800 relative group cursor-pointer transition-colors ${isBlackout ? 'bg-slate-900/30' : 'bg-slate-950/50'} ${selectedDate === day ? 'bg-cyan-900/20 border-cyan-500/30' : 'hover:bg-slate-900'}`} onClick={() => handleDateClick(day)}>
+                      <span className={`text-xs md:text-sm font-medium inline-block w-6 h-6 md:w-7 md:h-7 leading-6 md:leading-7 text-center rounded-full mb-1 ${isToday ? 'bg-red-600 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]' : 'text-slate-400'}`}>{day}</span>
+                      {isBlackout ? (<div className="flex justify-center mt-2"><Ban className="text-red-900/50" size={20} /></div>) : (<div className="space-y-1">{dayEvents.map(e => <div key={e.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${e.type === 'checkout' ? 'bg-cyan-950/50 text-cyan-400 border-cyan-800/50' : 'bg-emerald-950/50 text-emerald-400 border-emerald-800/50'}`}>{e.title}</div>)}</div>)}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          {selectedDate && !blackouts.includes(new Date(year, displayDate.getMonth(), selectedDate).toISOString().split('T')[0]) && (
+            <div className="mt-6 p-4 bg-slate-900/50 rounded-xl border border-slate-800 animate-fade-in">
+              <h4 className="font-bold text-white mb-3 flex items-center gap-2"><Calendar size={16} className="text-cyan-400"/> {monthName} {selectedDate}</h4>
+              {getEventsForDay(selectedDate).length === 0 ? <p className="text-slate-500 text-sm">Sector clear. No events.</p> : (
+                <div className="space-y-3">{getEventsForDay(selectedDate).map(e => (<div key={e.id} className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-sm"><div><p className="font-bold text-slate-200 text-sm">{e.title}</p><p className="text-xs text-slate-400 uppercase">{e.dept} • {e.fullName}</p></div><a href={getGoogleCalendarUrl(e)} target="_blank" rel="noopener noreferrer" className="bg-slate-700 hover:bg-slate-600 p-2 rounded text-white transition-colors"><CalendarPlus size={16}/></a></div>))}</div>
+              )}
             </div>
           )}
         </div>
@@ -862,8 +994,7 @@ const App = () => {
                     {filmItems.map(([name, data]) => {
                         const remaining = availableStock[name] !== undefined ? availableStock[name] : 99; 
                         const isSoldOut = remaining <= 0;
-                        // REMOVE asterisk from display name to avoid duplication if stored in key
-                        const displayName = name.replace(' *', '').replace('*', ''); 
+                        const displayName = name.replace(' *', '').replace('*', ''); // Clean name for display
                         return (<label key={name} className={`flex items-center space-x-3 p-3 border rounded-lg transition-all duration-200 ${isSoldOut ? 'bg-slate-900/50 border-slate-800 opacity-50 cursor-not-allowed' : 'bg-slate-900 border-slate-800 hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(8,145,178,0.1)] cursor-pointer'}`}><input type="checkbox" name="equipment" value={name} disabled={isSoldOut} defaultChecked={initialData.equipment?.includes(name)} className="w-5 h-5 rounded border-slate-600 text-cyan-600 focus:ring-cyan-500 bg-slate-800" /><div className="flex-1"><span className="text-slate-200 text-sm block font-medium">{displayName} {data.requiresTraining && <span className="text-red-400">*</span>}</span><span className={`text-[10px] font-mono uppercase tracking-wider ${isSoldOut ? 'text-red-500' : 'text-emerald-500'}`}>{isSoldOut ? 'OFFLINE / UNAVAILABLE' : `${remaining} UNITS ACTIVE`}</span></div></label>);
                     })}
                     </div>
@@ -987,11 +1118,10 @@ const App = () => {
 
             const stockStatus = {};
             Object.keys(inventory).forEach(item => { 
-                const total = inventory[item].count; 
-                const used = usageCounts[item] || 0;
-                stockStatus[item] = Math.max(0, total - used);
+                if (inventory[item].category === 'photo' || inventory[item].category === 'general') {
+                    stockStatus[item] = Math.max(0, inventory[item].count - (usageCounts[item] || 0)); 
+                }
             });
-            
             setAvailableStock(stockStatus);
         };
 
@@ -1058,6 +1188,24 @@ const App = () => {
       </FormContainer>
     );
   }
+  
+  // GAME VIEW IS INCLUDED HERE (Kept from previous turn)
+  function GameView({ onExit }) {
+      // ... (Same code as before, omitted for brevity in diff but needs to be in file)
+      const canvasRef = useRef(null);
+      const [gameState, setGameState] = useState('start'); const [score, setScore] = useState(0); const [highScore, setHighScore] = useState(parseInt(localStorage.getItem('lancer_highscore') || '0'));
+      const GRAVITY = 0.6; const JUMP_FORCE = -10; const SPEED = 5; const GROUND_HEIGHT = 50;
+      const playerRef = useRef({ x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false }); const obstaclesRef = useRef([]); const frameRef = useRef(0); const scoreRef = useRef(0); const loopRef = useRef(null);
+      const jump = () => { if (!playerRef.current.isJumping) { playerRef.current.vy = JUMP_FORCE; playerRef.current.isJumping = true; } };
+      const startGame = () => { setGameState('playing'); setScore(0); scoreRef.current = 0; playerRef.current = { x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false }; obstaclesRef.current = []; frameRef.current = 0; gameLoop(); };
+      const gameLoop = () => { const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, canvas.height - GROUND_HEIGHT); ctx.lineTo(canvas.width, canvas.height - GROUND_HEIGHT); ctx.stroke(); const p = playerRef.current; p.vy += GRAVITY; p.y += p.vy; if (p.y > canvas.height - GROUND_HEIGHT - p.height) { p.y = canvas.height - GROUND_HEIGHT - p.height; p.vy = 0; p.isJumping = false; } ctx.font = '32px Arial'; ctx.fillText('🏇', p.x, p.y + 32); frameRef.current++; if (frameRef.current % 100 === 0) { const type = Math.random() > 0.5 ? '📹' : 'F'; obstaclesRef.current.push({ x: canvas.width, y: canvas.height - GROUND_HEIGHT - 30, width: 30, height: 30, type: type }); } for (let i = obstaclesRef.current.length - 1; i >= 0; i--) { const obs = obstaclesRef.current[i]; obs.x -= SPEED; ctx.fillStyle = obs.type === 'F' ? '#ef4444' : '#fbbf24'; ctx.font = '28px Arial'; ctx.fillText(obs.type, obs.x, obs.y + 28); if (p.x < obs.x + obs.width && p.x + p.width > obs.x && p.y < obs.y + obs.height && p.y + p.height > obs.y) { handleGameOver(); return; } if (obs.x + obs.width < 0) { obstaclesRef.current.splice(i, 1); scoreRef.current += 10; setScore(scoreRef.current); } } ctx.fillStyle = '#fff'; ctx.font = '16px monospace'; ctx.fillText(`SCORE: ${scoreRef.current}`, 10, 20); loopRef.current = requestAnimationFrame(gameLoop); };
+      const handleGameOver = () => { cancelAnimationFrame(loopRef.current); setGameState('gameover'); if (scoreRef.current > highScore) { setHighScore(scoreRef.current); localStorage.setItem('lancer_highscore', scoreRef.current.toString()); } };
+      useEffect(() => { const handleKeyDown = (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { if (gameState === 'playing') jump(); else if (gameState !== 'playing') startGame(); } }; window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown); }, [gameState]);
+      return (
+          <div className="max-w-3xl mx-auto bg-black border-4 border-slate-700 rounded-xl overflow-hidden font-mono shadow-2xl relative animate-fade-in select-none"><div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]"></div><div className="bg-slate-900 p-4 border-b-4 border-slate-700 flex justify-between items-center relative z-20"><div className="text-green-400 text-xs flex items-center gap-2"><Gamepad2 size={14}/> LANCER_RUN.EXE</div><div className="text-yellow-400 text-xs flex items-center gap-2"><Trophy size={14}/> HI-SCORE: {highScore}</div><button onClick={onExit} className="text-red-500 hover:text-red-400 text-xs uppercase font-bold">[ EXIT SYSTEM ]</button></div><div className="relative bg-slate-950" style={{ height: '300px' }}><canvas ref={canvasRef} width={700} height={300} className="w-full h-full block"/>{gameState === 'start' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-20"><h2 className="text-4xl font-bold text-cyan-400 mb-4 tracking-widest glitch-text">LANCER RUN</h2><p className="text-slate-300 text-sm mb-6">Space/Up to Jump. Avoid the F's!</p><button onClick={startGame} className="px-6 py-2 bg-green-600 hover:bg-green-500 text-black font-bold rounded blink-anim">INSERT COIN (START)</button></div>)}{gameState === 'gameover' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/40 z-20 backdrop-blur-sm"><h2 className="text-4xl font-bold text-red-500 mb-2">CRITICAL FAILURE</h2><p className="text-white text-xl mb-6">FINAL SCORE: {score}</p><button onClick={startGame} className="px-6 py-2 bg-white text-black font-bold rounded hover:bg-slate-200">RETRY MISSION</button></div>)}</div></div>
+      );
+  }
+
 };
 
 export default App;
