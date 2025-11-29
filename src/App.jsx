@@ -435,6 +435,102 @@ const App = () => {
     );
   }
 
+  function InventoryManager({ inventory, setInventory }) {
+    const [localInventory, setLocalInventory] = useState(inventory);
+    const [saving, setSaving] = useState(false);
+    const [newItemName, setNewItemName] = useState('');
+    const [newItemCount, setNewItemCount] = useState(1);
+    const [newItemCategory, setNewItemCategory] = useState('film');
+    const [newItemTraining, setNewItemTraining] = useState(false);
+    const [editingKey, setEditingKey] = useState(null);
+    const [editName, setEditName] = useState('');
+    const [editTraining, setEditTraining] = useState(false);
+
+    const handleChange = (item, field, value) => { setLocalInventory(prev => ({ ...prev, [item]: { ...prev[item], [field]: value } })); };
+    const handleDelete = (item) => { if(window.confirm(`Delete "${item}" from inventory permanently?`)) { const updated = { ...localInventory }; delete updated[item]; setLocalInventory(updated); } };
+    const handleAddItem = (e) => { e.preventDefault(); if (!newItemName) return; const name = newItemName.trim(); if (localInventory[name]) { alert("Item already exists."); return; } setLocalInventory(prev => ({ ...prev, [name]: { count: parseInt(newItemCount) || 0, category: newItemCategory, requiresTraining: newItemTraining } })); setNewItemName(''); setNewItemCount(1); setNewItemTraining(false); };
+    const startEditing = (key, data) => { setEditingKey(key); setEditName(key); setEditTraining(data.requiresTraining || false); };
+    const cancelEditing = () => { setEditingKey(null); setEditName(''); setEditTraining(false); };
+    const saveEdit = () => { if (!editName.trim()) return; const newKey = editName.trim(); const itemData = localInventory[editingKey]; const newData = { ...itemData, requiresTraining: editTraining }; const updatedInventory = { ...localInventory }; if (newKey !== editingKey) { if (updatedInventory[newKey]) { alert("An item with this name already exists."); return; } delete updatedInventory[editingKey]; updatedInventory[newKey] = newData; } else { updatedInventory[newKey] = newData; } setLocalInventory(updatedInventory); setEditingKey(null); };
+    
+    const handleSave = async () => { 
+        if (!window.confirm("Are you sure you want to update the live inventory database? This affects all current users.")) return;
+        setSaving(true); 
+        try { await setDoc(doc(db, "settings", "inventory_v2"), localInventory); setInventory(localInventory); alert("Inventory matrix updated."); } 
+        catch (error) { console.error("Error:", error); alert("Save failed."); } 
+        setSaving(false); 
+    };
+
+    const groupedItems = { film: [], photo: [], culinary: [], general: [] };
+    Object.entries(localInventory).forEach(([name, data]) => { if (groupedItems[data.category]) groupedItems[data.category].push({ name, ...data }); else groupedItems['general'].push({ name, ...data }); });
+
+    return (
+        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+            <div className="bg-slate-950/50 border-b border-slate-800 p-6 flex justify-between items-center"><div><h2 className="text-xl font-bold text-white flex items-center gap-2"><Settings className="text-amber-400" /> Inventory Matrix</h2></div><button onClick={handleSave} disabled={saving} className="bg-amber-600 hover:bg-amber-500 text-slate-900 px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 shadow-[0_0_15px_rgba(245,158,11,0.3)]">{saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} {saving ? 'Processing...' : 'Save Changes'}</button></div>
+            <div className="p-6 bg-slate-900/30 border-b border-slate-800"><h3 className="text-sm font-mono text-cyan-500 uppercase mb-3">Add New Asset</h3><form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end"><div className="flex-1 w-full"><label className="block text-xs text-slate-500 mb-1">Item Name</label><input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" required /></div><div className="w-24"><label className="block text-xs text-slate-500 mb-1">Count</label><input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" /></div><div className="w-32"><label className="block text-xs text-slate-500 mb-1">Category</label><select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"><option value="film">Film</option><option value="photo">Photo</option><option value="culinary">Culinary</option><option value="general">General</option></select></div><div className="flex items-center gap-2 pb-2"><input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500" /><label className="text-sm text-slate-400">Training Req.</label></div><button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-medium flex items-center gap-1"><Plus size={16}/> Add</button></form></div>
+            <div className="p-6 space-y-8">{Object.entries(groupedItems).map(([cat, items]) => (<div key={cat}><h3 className="text-lg font-bold text-white capitalize mb-4 border-b border-slate-800 pb-2 text-emerald-400">{cat} Inventory</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{items.map((item) => (<div key={item.name} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700 flex justify-between items-center hover:border-slate-600 transition-colors">{editingKey === item.name ? (<div className="flex-1 flex items-center gap-2 mr-2"><input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 bg-slate-950 border border-cyan-500 rounded p-1 text-white text-sm outline-none" autoFocus /><label className="flex items-center gap-1 text-xs text-slate-400"><input type="checkbox" checked={editTraining} onChange={e => setEditTraining(e.target.checked)} /> Train</label><button onClick={saveEdit} className="text-green-500 hover:text-green-400 p-1"><Check size={18}/></button><button onClick={cancelEditing} className="text-red-500 hover:text-red-400 p-1"><X size={18}/></button></div>) : (<div className="flex-1 mr-4 flex items-center justify-between"><div><span className="font-mono text-slate-300 text-sm block truncate">{item.name.replace(' *','').replace('*','')}</span>{item.requiresTraining && <span className="text-[10px] text-red-400 uppercase bg-red-900/20 px-1 rounded">Training Req.</span>}</div><button onClick={() => startEditing(item.name, item)} className="text-slate-600 hover:text-cyan-400 p-1 ml-2"><Edit2 size={14}/></button></div>)}<div className="flex items-center gap-2 border-l border-slate-700 pl-3"><span className="text-xs text-slate-500 uppercase">Qty</span><input type="number" min="0" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value))} className="w-14 p-1 bg-slate-950 border border-slate-700 rounded text-center font-bold text-cyan-400 focus:border-cyan-500 outline-none text-sm"/><button onClick={() => handleDelete(item.name)} className="text-slate-600 hover:text-red-500 transition-colors ml-1"><Trash2 size={16}/></button></div></div>))}</div></div>))}</div>
+        </div>
+    );
+  }
+
+  function FeedbackView({ currentUser, adminMode, setSubmitted, onCancel }) {
+      const [type, setType] = useState('bug');
+      const [message, setMessage] = useState('');
+      const [adminFeedbackList, setAdminFeedbackList] = useState([]);
+      useEffect(() => { if (adminMode) { const q = query(collection(db, "feedback"), orderBy("createdAt", "desc")); const unsubscribe = onSnapshot(q, (snapshot) => { const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); setAdminFeedbackList(items); }); return () => unsubscribe(); } }, [adminMode]);
+      const handleSubmit = async (e) => { e.preventDefault(); if(!message.trim()) return; try { const docData = { type, message, email: currentUser?.email || 'Anonymous', fullName: currentUser?.displayName || 'Guest', createdAt: new Date(), status: 'Open' }; await addDoc(collection(db, "feedback"), docData); if (type === 'bug') { sendNotificationEmail({ to_name: "Admin", to_email: "erivers@salpointe.org", subject: `[BUG REPORT] CTE Hub Issue`, title: "Bug Report", status: "Urgent", message: `User ${docData.fullName} reported a bug:\n\n${message}` }); } alert("Feedback received."); setMessage(''); if(!adminMode) onCancel(); } catch (err) { console.error(err); alert("Error sending feedback."); } };
+      const handleResolve = async (id) => { if(window.confirm("Mark Resolved?")) await updateDoc(doc(db, "feedback", id), { status: 'Resolved' }); };
+      const handleDelete = async (id) => { if(window.confirm("Delete feedback?")) await deleteDoc(doc(db, "feedback", id)); };
+      return (
+          <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+              <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl">
+                  <div className="flex items-center gap-4 mb-6"><div className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/30 text-cyan-400"><MessageSquare size={28} /></div><div><h2 className="text-2xl font-bold text-white">System Feedback</h2><p className="text-slate-400 text-sm">Report glitches or suggest system upgrades.</p></div></div>
+                  <form onSubmit={handleSubmit} className="space-y-6"><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><button type="button" onClick={() => setType('bug')} className={`p-4 rounded-xl border text-left transition-all ${type === 'bug' ? 'bg-red-950/40 border-red-500 text-red-400' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}><div className="flex items-center gap-2 font-bold mb-1"><Bug size={18} /> Bug Report</div><p className="text-xs opacity-80">Something is broken.</p></button><button type="button" onClick={() => setType('feature')} className={`p-4 rounded-xl border text-left transition-all ${type === 'feature' ? 'bg-amber-950/40 border-amber-500 text-amber-400' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}><div className="flex items-center gap-2 font-bold mb-1"><Lightbulb size={18} /> Feature Idea</div><p className="text-xs opacity-80">"It would be cool if..."</p></button></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-2 ml-1">Details</label><textarea value={message} onChange={e => setMessage(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-slate-200 focus:border-cyan-500 outline-none h-32" placeholder="Describe..." required /></div><div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-6 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors">Cancel</button><button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2 rounded-lg font-bold shadow-lg transition-all">Submit Feedback</button></div></form>
+              </div>
+              {adminMode && (<div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl"><h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><ClipboardList size={18} className="text-purple-400"/> Admin Feedback Inbox</h3><div className="space-y-3">{adminFeedbackList.length === 0 ? <p className="text-slate-500 text-center py-4">No reports.</p> : adminFeedbackList.map(item => (<div key={item.id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row gap-4 justify-between items-start hover:border-slate-700 transition-colors"><div className="flex-1"><div className="flex items-center gap-2 mb-1">{item.type === 'bug' ? <span className="text-xs font-bold bg-red-900/30 text-red-400 px-2 py-1 rounded flex items-center gap-1"><Bug size={12}/> BUG</span> : <span className="text-xs font-bold bg-amber-900/30 text-amber-400 px-2 py-1 rounded flex items-center gap-1"><Lightbulb size={12}/> IDEA</span>}{item.status === 'Resolved' && <span className="text-xs font-bold bg-green-900/30 text-green-400 px-2 py-1 rounded">RESOLVED</span>}<span className="text-xs text-slate-500 ml-2">{item.fullName}</span></div><p className="text-slate-300 text-sm leading-relaxed mt-2">{item.message}</p></div><div className="flex gap-2">{item.status !== 'Resolved' && (<button onClick={() => handleResolve(item.id)} className="p-2 bg-green-900/20 text-green-500 rounded-lg hover:bg-green-900/40" title="Mark Resolved"><CheckSquare size={16}/></button>)}<button onClick={() => handleDelete(item.id)} className="p-2 bg-slate-800 text-slate-500 rounded-lg hover:bg-red-900/20 hover:text-red-500" title="Delete"><Trash2 size={16}/></button></div></div>))}</div></div>)}
+          </div>
+      );
+  }
+
+  function AnalyticsView() {
+      const [loading, setLoading] = useState(true);
+      const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, deptCounts: {}, topEquipment: [] });
+      useEffect(() => {
+        const q = query(collection(db, "requests"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          let total = 0, approved = 0, pending = 0, deptCounts = {}, equipmentCounts = {};
+          snapshot.forEach(doc => {
+            const data = doc.data(); total++;
+            if (data.status === 'Approved' || data.status === 'Completed') approved++;
+            if (data.status === 'Pending Review') pending++;
+            deptCounts[data.dept] = (deptCounts[data.dept] || 0) + 1;
+            if (data.equipment) { const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment]; items.forEach(item => { equipmentCounts[item] = (equipmentCounts[item] || 0) + 1; }); }
+          });
+          const sortedEquipment = Object.entries(equipmentCounts).sort(([,a], [,b]) => b - a).slice(0, 5);
+          setStats({ total, approved, pending, deptCounts, topEquipment: sortedEquipment });
+          setLoading(false);
+        });
+        return () => unsubscribe();
+      }, []);
+      const approvalRate = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-6"><div><h2 className="text-2xl font-bold text-white flex items-center gap-2"><TrendingUp className="text-emerald-400" /> Data Analytics</h2></div><div className="bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-cyan-400 font-mono text-sm">Total Requests: <strong>{stats.total}</strong></div></div>
+            {loading ? <div className="text-center py-12 text-slate-500 font-mono">CALCULATING...</div> : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-emerald-950/30 rounded-xl p-5 border border-emerald-500/20"><h4 className="text-emerald-400 font-bold text-xs uppercase tracking-widest mb-2">Approval Rate</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-emerald-400 font-mono">{approvalRate}%</span></div></div>
+                <div className="bg-blue-950/30 rounded-xl p-5 border border-blue-500/20"><h4 className="text-blue-400 font-bold text-xs uppercase tracking-widest mb-2">Completed</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-blue-400 font-mono">{stats.approved}</span></div></div>
+                <div className="bg-amber-950/30 rounded-xl p-5 border border-amber-500/20"><h4 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-2">Pending</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-amber-400 font-mono">{stats.pending}</span></div></div>
+                <div className="md:col-span-2 bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><PieChart size={16} className="text-purple-400" /> Requests by Department</h3><div className="space-y-4">{Object.entries(stats.deptCounts).sort(([,a], [,b]) => b - a).map(([dept, count]) => { const percentage = (count / stats.total) * 100; return (<div key={dept}><div className="flex justify-between text-xs mb-2 font-mono"><span className="text-slate-400">{dept}</span><span className="text-cyan-400">{count}</span></div><div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${percentage}%` }}></div></div></div>); })}</div></div>
+                <div className="bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><Camera size={16} className="text-pink-400" /> Top Gear</h3><ul className="space-y-3">{stats.topEquipment.map(([item, count], index) => (<li key={item} className="flex items-center gap-3"><div className="w-6 h-6 rounded bg-slate-800 text-cyan-400 flex items-center justify-center text-xs font-mono border border-slate-700">{index + 1}</div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-300 truncate">{item.replace(' *', '')}</p><p className="text-xs text-slate-500 font-mono">{count} uses</p></div></li>))}</ul></div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+  }
+
   function MyRequestsView({ currentUser }) {
     const [myRequests, setMyRequests] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -540,18 +636,7 @@ const App = () => {
     const handleStatusUpdate = async (req, newStatus) => { if (!window.confirm(`Confirm status change to: ${newStatus}?`)) return; await updateDoc(doc(db, "requests", req.id), { status: newStatus }); if (selectedRequest && selectedRequest.id === req.id) setSelectedRequest(prev => ({...prev, status: newStatus})); sendNotificationEmail({ to_name: req.fullName, to_email: req.email, subject: `Request Update: ${req.title}`, title: req.title, status: newStatus, message: `Status updated to ${newStatus}.` }); };
     const handleDelete = async (id) => { if(window.confirm("Delete this record permanently?")) { await deleteDoc(doc(db, "requests", id)); if (selectedRequest && selectedRequest.id === id) setSelectedRequest(null); } };
     const downloadCSV = () => { const headers = ["ID", "Department", "Title", "User", "Email", "Date Submitted", "Status", "Details"]; const rows = requests.map(row => [row.displayId, row.dept, `"${row.title}"`, row.fullName, row.email, row.formattedDate, row.status, `"${(row.details || row.brief || row.description || '').replace(/"/g, '""')}"` ]); const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n'); const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "cte_requests_export.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
-    
-    const filteredRequests = requests.filter(r => {
-        const matchesDept = filter === 'all' ? true : r.dept?.toLowerCase().includes(filter.toLowerCase());
-        const searchLower = searchTerm.toLowerCase();
-        const matchesSearch = 
-            (r.title && r.title.toLowerCase().includes(searchLower)) || 
-            (r.fullName && r.fullName.toLowerCase().includes(searchLower)) || 
-            (r.displayId && r.displayId.toLowerCase().includes(searchLower)) ||
-            (r.email && r.email.toLowerCase().includes(searchLower));
-        return matchesDept && matchesSearch;
-    });
-
+    const filteredRequests = requests.filter(r => { const matchesDept = filter === 'all' ? true : r.dept?.toLowerCase().includes(filter.toLowerCase()); const searchLower = searchTerm.toLowerCase(); const matchesSearch = r.title?.toLowerCase().includes(searchLower) || r.fullName?.toLowerCase().includes(searchLower) || r.displayId?.toLowerCase().includes(searchLower) || r.email?.toLowerCase().includes(searchLower); return matchesDept && matchesSearch; });
     const getStatusColor = (status) => { switch(status) { case 'Approved': return 'bg-green-950/50 text-green-400 border-green-500/30'; case 'Denied': return 'bg-red-950/50 text-red-400 border-red-500/30'; case 'Completed': return 'bg-slate-800 text-slate-400 border-slate-700'; default: return 'bg-amber-950/50 text-amber-400 border-amber-500/30'; }};
 
     return (
@@ -617,21 +702,6 @@ const App = () => {
     );
   }
 
-  function GameView({ onExit }) {
-      const canvasRef = useRef(null);
-      const [gameState, setGameState] = useState('start'); const [score, setScore] = useState(0); const [highScore, setHighScore] = useState(parseInt(localStorage.getItem('lancer_highscore') || '0'));
-      const GRAVITY = 0.6; const JUMP_FORCE = -10; const SPEED = 5; const GROUND_HEIGHT = 50;
-      const playerRef = useRef({ x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false }); const obstaclesRef = useRef([]); const frameRef = useRef(0); const scoreRef = useRef(0); const loopRef = useRef(null);
-      const jump = () => { if (!playerRef.current.isJumping) { playerRef.current.vy = JUMP_FORCE; playerRef.current.isJumping = true; } };
-      const startGame = () => { setGameState('playing'); setScore(0); scoreRef.current = 0; playerRef.current = { x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false }; obstaclesRef.current = []; frameRef.current = 0; gameLoop(); };
-      const gameLoop = () => { const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, canvas.height - GROUND_HEIGHT); ctx.lineTo(canvas.width, canvas.height - GROUND_HEIGHT); ctx.stroke(); const p = playerRef.current; p.vy += GRAVITY; p.y += p.vy; if (p.y > canvas.height - GROUND_HEIGHT - p.height) { p.y = canvas.height - GROUND_HEIGHT - p.height; p.vy = 0; p.isJumping = false; } ctx.font = '32px Arial'; ctx.fillText('🏇', p.x, p.y + 32); frameRef.current++; if (frameRef.current % 100 === 0) { const type = Math.random() > 0.5 ? '📹' : 'F'; obstaclesRef.current.push({ x: canvas.width, y: canvas.height - GROUND_HEIGHT - 30, width: 30, height: 30, type: type }); } for (let i = obstaclesRef.current.length - 1; i >= 0; i--) { const obs = obstaclesRef.current[i]; obs.x -= SPEED; ctx.fillStyle = obs.type === 'F' ? '#ef4444' : '#fbbf24'; ctx.font = '28px Arial'; ctx.fillText(obs.type, obs.x, obs.y + 28); if (p.x < obs.x + obs.width && p.x + p.width > obs.x && p.y < obs.y + obs.height && p.y + p.height > obs.y) { handleGameOver(); return; } if (obs.x + obs.width < 0) { obstaclesRef.current.splice(i, 1); scoreRef.current += 10; setScore(scoreRef.current); } } ctx.fillStyle = '#fff'; ctx.font = '16px monospace'; ctx.fillText(`SCORE: ${scoreRef.current}`, 10, 20); loopRef.current = requestAnimationFrame(gameLoop); };
-      const handleGameOver = () => { cancelAnimationFrame(loopRef.current); setGameState('gameover'); if (scoreRef.current > highScore) { setHighScore(scoreRef.current); localStorage.setItem('lancer_highscore', scoreRef.current.toString()); } };
-      useEffect(() => { const handleKeyDown = (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { if (gameState === 'playing') jump(); else if (gameState !== 'playing') startGame(); } }; window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown); }, [gameState]);
-      return (
-          <div className="max-w-3xl mx-auto bg-black border-4 border-slate-700 rounded-xl overflow-hidden font-mono shadow-2xl relative animate-fade-in select-none"><div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]"></div><div className="bg-slate-900 p-4 border-b-4 border-slate-700 flex justify-between items-center relative z-20"><div className="text-green-400 text-xs flex items-center gap-2"><Gamepad2 size={14}/> LANCER_RUN.EXE</div><div className="text-yellow-400 text-xs flex items-center gap-2"><Trophy size={14}/> HI-SCORE: {highScore}</div><button onClick={onExit} className="text-red-500 hover:text-red-400 text-xs uppercase font-bold">[ EXIT SYSTEM ]</button></div><div className="relative bg-slate-950" style={{ height: '300px' }}><canvas ref={canvasRef} width={700} height={300} className="w-full h-full block"/>{gameState === 'start' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-20"><h2 className="text-4xl font-bold text-cyan-400 mb-4 tracking-widest glitch-text">LANCER RUN</h2><p className="text-slate-300 text-sm mb-6">Space/Up to Jump. Avoid the F's!</p><button onClick={startGame} className="px-6 py-2 bg-green-600 hover:bg-green-500 text-black font-bold rounded blink-anim">INSERT COIN (START)</button></div>)}{gameState === 'gameover' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/40 z-20 backdrop-blur-sm"><h2 className="text-4xl font-bold text-red-500 mb-2">CRITICAL FAILURE</h2><p className="text-white text-xl mb-6">FINAL SCORE: {score}</p><button onClick={startGame} className="px-6 py-2 bg-white text-black font-bold rounded hover:bg-slate-200">RETRY MISSION</button></div>)}</div></div>
-      );
-  }
-
   function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser, blackouts = [] }) { 
       const formRef = useRef(null);
       const draftKey = getDraftKey(title);
@@ -682,151 +752,7 @@ const App = () => {
       );
   }
 
-  function AnalyticsView() {
-    return (
-        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-12 text-center animate-fade-in">
-            <div className="inline-flex p-4 rounded-full bg-emerald-900/20 text-emerald-400 mb-6 shadow-[0_0_20px_rgba(52,211,153,0.3)]">
-                <BarChart3 size={48} />
-            </div>
-            <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">Analytics Module</h2>
-            <p className="text-slate-400 max-w-md mx-auto leading-relaxed">
-                Data visualization protocols are currently compiling. This module will track usage frequency, peak request times, and inventory depletion rates.
-            </p>
-        </div>
-    );
-  }
-
-  function InventoryManager({ inventory, setInventory }) {
-    const [newItem, setNewItem] = useState({ name: '', count: 1, category: 'general', requiresTraining: false });
-    const [isDirty, setIsDirty] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-
-    const handleUpdate = (name, field, value) => {
-        const updated = { ...inventory, [name]: { ...inventory[name], [field]: value } };
-        setInventory(updated);
-        setIsDirty(true);
-    };
-
-    const handleDelete = (name) => {
-        if(!window.confirm(`Permanently remove ${name} from inventory?`)) return;
-        const updated = { ...inventory };
-        delete updated[name];
-        setInventory(updated);
-        setIsDirty(true);
-    };
-
-    const handleAdd = () => {
-        if (!newItem.name) return;
-        const updated = { ...inventory, [newItem.name]: { count: newItem.count, category: newItem.category, requiresTraining: newItem.requiresTraining } };
-        setInventory(updated);
-        setNewItem({ name: '', count: 1, category: 'general', requiresTraining: false });
-        setIsDirty(true);
-    };
-
-    const saveChanges = async () => {
-        // *** 1. CONFIRMATION CHECK ***
-        const confirmed = window.confirm(
-            "CONFIRM DATABASE UPDATE:\n\nAre you sure you want to overwrite the live inventory system with these changes?"
-        );
-        
-        if (!confirmed) return;
-
-        setIsSaving(true);
-        try {
-            await setDoc(doc(db, "settings", "inventory_v2"), inventory);
-            setIsDirty(false);
-            alert("✅ Success: Live inventory updated.");
-        } catch (e) {
-            console.error(e);
-            alert("❌ Error: Could not save to database.");
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    return (
-      <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl animate-fade-in">
-        <div className="bg-slate-950/50 p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2"><Box className="text-amber-400" /> Inventory Control</h2>
-                <p className="text-slate-400 text-sm">Manage asset availability and restrictions.</p>
-            </div>
-            
-            {/* *** 2. SAVE BUTTON WITH STATE *** */}
-            {isDirty && (
-                <button 
-                    onClick={saveChanges} 
-                    disabled={isSaving}
-                    className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(217,119,6,0.5)] transition-all ${isSaving ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'}`}
-                >
-                    {isSaving ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
-                    {isSaving ? "Saving..." : "Save Changes"}
-                </button>
-            )}
-        </div>
-        
-        <div className="p-6 space-y-6">
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex flex-wrap gap-4 items-end">
-                <div className="flex-grow min-w-[200px]"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Item Name</label><input type="text" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" /></div>
-                <div className="w-20"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Qty</label><input type="number" value={newItem.count} onChange={e => setNewItem({...newItem, count: parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" /></div>
-                <div className="w-32"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Category</label><select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"><option value="general">General</option><option value="film">Film</option><option value="photo">Photo</option><option value="culinary">Culinary</option></select></div>
-                <div className="flex items-center gap-2 pb-2"><input type="checkbox" checked={newItem.requiresTraining} onChange={e => setNewItem({...newItem, requiresTraining: e.target.checked})} className="w-4 h-4 rounded bg-slate-700 border-slate-600 accent-cyan-500" /><label className="text-xs text-slate-300">Training?</label></div>
-                <button onClick={handleAdd} className="bg-cyan-600 hover:bg-cyan-500 text-white p-2.5 rounded-lg transition-colors"><Plus size={20} /></button>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-slate-800">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-slate-900 border-b border-slate-800 text-xs uppercase text-slate-500 font-mono">
-                            <th className="p-3">Asset Name</th>
-                            <th className="p-3">Category</th>
-                            <th className="p-3">Training Req.</th>
-                            <th className="p-3 w-24">Stock</th>
-                            <th className="p-3 w-16"></th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800 bg-slate-950/30">
-                        {Object.entries(inventory).sort().map(([name, item]) => (
-                            <tr key={name} className="hover:bg-slate-800/50 transition-colors">
-                                <td className="p-3 font-medium text-slate-200">{name}</td>
-                                <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] uppercase border font-bold ${item.category === 'film' ? 'text-cyan-400 border-cyan-900 bg-cyan-950/30' : item.category === 'photo' ? 'text-pink-400 border-pink-900 bg-pink-950/30' : 'text-slate-400 border-slate-700 bg-slate-800'}`}>{item.category}</span></td>
-                                <td className="p-3"><input type="checkbox" checked={item.requiresTraining} onChange={e => handleUpdate(name, 'requiresTraining', e.target.checked)} className="rounded bg-slate-900 border-slate-700 accent-cyan-500" /></td>
-                                <td className="p-3"><input type="number" value={item.count} onChange={e => handleUpdate(name, 'count', parseInt(e.target.value))} className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-center text-white text-sm focus:border-cyan-500 outline-none" /></td>
-                                <td className="p-3 text-right"><button onClick={() => handleDelete(name)} className="text-slate-600 hover:text-red-400 transition-colors"><Trash2 size={16} /></button></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-      </div>
-    );
-  }
-
-  function FeedbackView({ setSubmitted, onCancel }) {
-      return (
-          <FormContainer title="System Feedback" icon={MessageSquare} colorClass="bg-slate-500" setSubmitted={setSubmitted} onCancel={onCancel}>
-             <div className="space-y-4">
-                 <div className="p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-lg text-sm text-cyan-200">
-                    <p>Encountered a bug or have a feature request? Let the development team know directly.</p>
-                 </div>
-                 <div>
-                    <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Message Type</label>
-                    <select name="feedbackType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none">
-                        <option>Bug Report</option>
-                        <option>Feature Request</option>
-                        <option>General Inquiry</option>
-                    </select>
-                 </div>
-                 <div>
-                    <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Details</label>
-                    <textarea name="details" rows={5} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe the issue..." required></textarea>
-                 </div>
-             </div>
-          </FormContainer>
-      );
-  }
-
+  // *** THIS WAS MISSING ***
   function InventorySelector({ inventory, category }) {
       const filteredItems = Object.entries(inventory).filter(([_, item]) => item.category === category);
       return (
@@ -919,6 +845,21 @@ const App = () => {
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Menu Requirements</label><textarea name="menu" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Dietary restrictions, food preferences..." required /></div>
               </div>
           </FormContainer>
+      );
+  }
+  
+  function GameView({ onExit }) {
+      const canvasRef = useRef(null);
+      const [gameState, setGameState] = useState('start'); const [score, setScore] = useState(0); const [highScore, setHighScore] = useState(parseInt(localStorage.getItem('lancer_highscore') || '0'));
+      const GRAVITY = 0.6; const JUMP_FORCE = -10; const SPEED = 5; const GROUND_HEIGHT = 50;
+      const playerRef = useRef({ x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false }); const obstaclesRef = useRef([]); const frameRef = useRef(0); const scoreRef = useRef(0); const loopRef = useRef(null);
+      const jump = () => { if (!playerRef.current.isJumping) { playerRef.current.vy = JUMP_FORCE; playerRef.current.isJumping = true; } };
+      const startGame = () => { setGameState('playing'); setScore(0); scoreRef.current = 0; playerRef.current = { x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false }; obstaclesRef.current = []; frameRef.current = 0; gameLoop(); };
+      const gameLoop = () => { const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, canvas.height - GROUND_HEIGHT); ctx.lineTo(canvas.width, canvas.height - GROUND_HEIGHT); ctx.stroke(); const p = playerRef.current; p.vy += GRAVITY; p.y += p.vy; if (p.y > canvas.height - GROUND_HEIGHT - p.height) { p.y = canvas.height - GROUND_HEIGHT - p.height; p.vy = 0; p.isJumping = false; } ctx.font = '32px Arial'; ctx.fillText('🏇', p.x, p.y + 32); frameRef.current++; if (frameRef.current % 100 === 0) { const type = Math.random() > 0.5 ? '📹' : 'F'; obstaclesRef.current.push({ x: canvas.width, y: canvas.height - GROUND_HEIGHT - 30, width: 30, height: 30, type: type }); } for (let i = obstaclesRef.current.length - 1; i >= 0; i--) { const obs = obstaclesRef.current[i]; obs.x -= SPEED; ctx.fillStyle = obs.type === 'F' ? '#ef4444' : '#fbbf24'; ctx.font = '28px Arial'; ctx.fillText(obs.type, obs.x, obs.y + 28); if (p.x < obs.x + obs.width && p.x + p.width > obs.x && p.y < obs.y + obs.height && p.y + p.height > obs.y) { handleGameOver(); return; } if (obs.x + obs.width < 0) { obstaclesRef.current.splice(i, 1); scoreRef.current += 10; setScore(scoreRef.current); } } ctx.fillStyle = '#fff'; ctx.font = '16px monospace'; ctx.fillText(`SCORE: ${scoreRef.current}`, 10, 20); loopRef.current = requestAnimationFrame(gameLoop); };
+      const handleGameOver = () => { cancelAnimationFrame(loopRef.current); setGameState('gameover'); if (scoreRef.current > highScore) { setHighScore(scoreRef.current); localStorage.setItem('lancer_highscore', scoreRef.current.toString()); } };
+      useEffect(() => { const handleKeyDown = (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') { if (gameState === 'playing') jump(); else if (gameState !== 'playing') startGame(); } }; window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown); }, [gameState]);
+      return (
+          <div className="max-w-3xl mx-auto bg-black border-4 border-slate-700 rounded-xl overflow-hidden font-mono shadow-2xl relative animate-fade-in select-none"><div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]"></div><div className="bg-slate-900 p-4 border-b-4 border-slate-700 flex justify-between items-center relative z-20"><div className="text-green-400 text-xs flex items-center gap-2"><Gamepad2 size={14}/> LANCER_RUN.EXE</div><div className="text-yellow-400 text-xs flex items-center gap-2"><Trophy size={14}/> HI-SCORE: {highScore}</div><button onClick={onExit} className="text-red-500 hover:text-red-400 text-xs uppercase font-bold">[ EXIT SYSTEM ]</button></div><div className="relative bg-slate-950" style={{ height: '300px' }}><canvas ref={canvasRef} width={700} height={300} className="w-full h-full block"/>{gameState === 'start' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-20"><h2 className="text-4xl font-bold text-cyan-400 mb-4 tracking-widest glitch-text">LANCER RUN</h2><p className="text-slate-300 text-sm mb-6">Space/Up to Jump. Avoid the F's!</p><button onClick={startGame} className="px-6 py-2 bg-green-600 hover:bg-green-500 text-black font-bold rounded blink-anim">INSERT COIN (START)</button></div>)}{gameState === 'gameover' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/40 z-20 backdrop-blur-sm"><h2 className="text-4xl font-bold text-red-500 mb-2">CRITICAL FAILURE</h2><p className="text-white text-xl mb-6">FINAL SCORE: {score}</p><button onClick={startGame} className="px-6 py-2 bg-white text-black font-bold rounded hover:bg-slate-200">RETRY MISSION</button></div>)}</div></div>
       );
   }
 
