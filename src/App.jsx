@@ -699,6 +699,7 @@ const App = () => {
   function InventoryManager({ inventory, setInventory }) {
     const [newItem, setNewItem] = useState({ name: '', count: 1, category: 'general', requiresTraining: false });
     const [isDirty, setIsDirty] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     const handleUpdate = (name, field, value) => {
         const updated = { ...inventory, [name]: { ...inventory[name], [field]: value } };
@@ -723,26 +724,43 @@ const App = () => {
     };
 
     const saveChanges = async () => {
+        // *** 1. CONFIRMATION CHECK ***
+        const confirmed = window.confirm(
+            "CONFIRM DATABASE UPDATE:\n\nAre you sure you want to overwrite the live inventory system with these changes?"
+        );
+        
+        if (!confirmed) return;
+
+        setIsSaving(true);
         try {
             await setDoc(doc(db, "settings", "inventory_v2"), inventory);
             setIsDirty(false);
-            alert("Inventory database updated successfully.");
+            alert("✅ Success: Live inventory updated.");
         } catch (e) {
             console.error(e);
-            alert("Failed to save changes.");
+            alert("❌ Error: Could not save to database.");
+        } finally {
+            setIsSaving(false);
         }
     };
 
     return (
       <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl animate-fade-in">
-        <div className="bg-slate-950/50 p-6 border-b border-slate-800 flex justify-between items-center">
+        <div className="bg-slate-950/50 p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2"><Box className="text-amber-400" /> Inventory Control</h2>
                 <p className="text-slate-400 text-sm">Manage asset availability and restrictions.</p>
             </div>
+            
+            {/* *** 2. SAVE BUTTON WITH STATE *** */}
             {isDirty && (
-                <button onClick={saveChanges} className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 animate-pulse shadow-[0_0_15px_rgba(217,119,6,0.5)]">
-                    <Save size={18} /> Save Changes
+                <button 
+                    onClick={saveChanges} 
+                    disabled={isSaving}
+                    className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-[0_0_15px_rgba(217,119,6,0.5)] transition-all ${isSaving ? 'bg-slate-700 text-slate-400 cursor-wait' : 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'}`}
+                >
+                    {isSaving ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
+                    {isSaving ? "Saving..." : "Save Changes"}
                 </button>
             )}
         </div>
