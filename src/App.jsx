@@ -44,8 +44,9 @@ import {
   Zap,        
   FileX,      
   ShieldCheck,
-  Plus, // Added Plus icon
-  Trash2 // Added Trash icon
+  Plus, 
+  Trash2,
+  Edit2 // Added Edit2 (Pencil) icon
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -75,7 +76,6 @@ const ALLOWED_ADMINS = [
 ];
 
 // *** NEW STRUCTURED INVENTORY ***
-// Items now have count, category, and training flag
 const DEFAULT_INVENTORY = {
   'Cinema Camera Kit': { count: 1, category: 'film', requiresTraining: true },
   'Gimbal / Stabilizer': { count: 6, category: 'film', requiresTraining: true },
@@ -144,7 +144,7 @@ const App = () => {
 
   useEffect(() => {
     const fetchInventory = async () => {
-        const docRef = doc(db, "settings", "inventory_v2"); // Changed to v2 for new structure
+        const docRef = doc(db, "settings", "inventory_v2"); 
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
             setInventory(docSnap.data());
@@ -255,7 +255,6 @@ const App = () => {
             {currentView === Departments.LANDING && <LandingPage currentUser={currentUser} onLogin={handleLogin} onEnter={goToDashboard} />}
             {currentView === Departments.DASHBOARD && <ServiceGrid onViewChange={setCurrentView} currentUser={currentUser} />}
             
-            {/* Forms receive blackouts for validation */}
             {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
             {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
             {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
@@ -283,7 +282,6 @@ const App = () => {
   );
 
   // --- Sub-Components ---
-  // (LandingPage, SuccessView, Dashboard, ContactSection - Same as before, omitted for brevity in diff but fully present in concept)
   function LandingPage({ currentUser, onLogin, onEnter }) {
       return (
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-12 animate-fade-in">
@@ -299,70 +297,33 @@ const App = () => {
                 <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
                     Eliminating the friction of paper logs and email chains. A centralized command center for Salpointe's creative technology.
                 </p>
-                
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
                     {currentUser ? (
-                        <button 
-                            onClick={onEnter}
-                            className="group relative px-8 py-4 bg-cyan-600 hover:bg-cyan-500 text-white text-lg font-bold rounded-xl shadow-[0_0_20px_rgba(8,145,178,0.4)] transition-all flex items-center gap-3 w-full sm:w-auto justify-center overflow-hidden"
-                        >
-                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                            <Zap size={24} className="fill-white" /> 
-                            Initialize Hub
+                        <button onClick={onEnter} className="group relative px-8 py-4 bg-cyan-600 hover:bg-cyan-500 text-white text-lg font-bold rounded-xl shadow-[0_0_20px_rgba(8,145,178,0.4)] transition-all flex items-center gap-3 w-full sm:w-auto justify-center overflow-hidden">
+                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div><Zap size={24} className="fill-white" /> Initialize Hub
                         </button>
                     ) : (
-                        <button 
-                            onClick={onLogin}
-                            className="group px-8 py-4 bg-white text-slate-900 hover:bg-slate-200 text-lg font-bold rounded-xl shadow-lg transition-all flex items-center gap-3 w-full sm:w-auto justify-center"
-                        >
-                            <LogIn size={24} />
-                            Login to Access
-                        </button>
+                        <button onClick={onLogin} className="group px-8 py-4 bg-white text-slate-900 hover:bg-slate-200 text-lg font-bold rounded-xl shadow-lg transition-all flex items-center gap-3 w-full sm:w-auto justify-center"><LogIn size={24} /> Login to Access</button>
                     )}
                 </div>
             </div>
-
-            {/* Problem / Solution Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full text-left">
-                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-red-500/30 transition-colors group">
-                    <div className="w-12 h-12 bg-red-900/20 rounded-lg flex items-center justify-center text-red-500 mb-4 group-hover:scale-110 transition-transform">
-                        <FileX size={24} />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-2">Paperless Protocol</h3>
-                    <p className="text-slate-400 text-sm">Deprecated legacy analog logs. Requests are now digital, trackable, and impossible to lose.</p>
-                </div>
-                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-cyan-500/30 transition-colors group">
-                    <div className="w-12 h-12 bg-cyan-900/20 rounded-lg flex items-center justify-center text-cyan-400 mb-4 group-hover:scale-110 transition-transform">
-                        <Cpu size={24} />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-2">Real-Time Inventory</h3>
-                    <p className="text-slate-400 text-sm">Live database tracking prevents double-bookings. See exactly what gear is available, instantly.</p>
-                </div>
-                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-emerald-500/30 transition-colors group">
-                    <div className="w-12 h-12 bg-emerald-900/20 rounded-lg flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition-transform">
-                        <ShieldCheck size={24} />
-                    </div>
-                    <h3 className="text-xl font-bold text-white mb-2">Secure Access</h3>
-                    <p className="text-slate-400 text-sm">Authenticated via Salpointe Google Workspace. Your data is protected and your history is saved.</p>
-                </div>
+                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-red-500/30 transition-colors group"><div className="w-12 h-12 bg-red-900/20 rounded-lg flex items-center justify-center text-red-500 mb-4 group-hover:scale-110 transition-transform"><FileX size={24} /></div><h3 className="text-xl font-bold text-white mb-2">Paperless Protocol</h3><p className="text-slate-400 text-sm">Deprecated legacy analog logs. Requests are now digital, trackable, and impossible to lose.</p></div>
+                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-cyan-500/30 transition-colors group"><div className="w-12 h-12 bg-cyan-900/20 rounded-lg flex items-center justify-center text-cyan-400 mb-4 group-hover:scale-110 transition-transform"><Cpu size={24} /></div><h3 className="text-xl font-bold text-white mb-2">Real-Time Inventory</h3><p className="text-slate-400 text-sm">Live database tracking prevents double-bookings. See exactly what gear is available, instantly.</p></div>
+                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-emerald-500/30 transition-colors group"><div className="w-12 h-12 bg-emerald-900/20 rounded-lg flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition-transform"><ShieldCheck size={24} /></div><h3 className="text-xl font-bold text-white mb-2">Secure Access</h3><p className="text-slate-400 text-sm">Authenticated via Salpointe Google Workspace. Your data is protected and your history is saved.</p></div>
             </div>
         </div>
       );
   }
 
   function SuccessView({ onReset }) {
+    // ... same as before
     return (
       <div className="max-w-lg mx-auto bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 p-8 text-center animate-fade-in-up">
-        <div className="w-20 h-20 bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-400 shadow-[0_0_20px_rgba(74,222,128,0.2)]">
-            <CheckCircle size={40} />
-        </div>
+        <div className="w-20 h-20 bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-400 shadow-[0_0_20px_rgba(74,222,128,0.2)]"><CheckCircle size={40} /></div>
         <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">Request Transmitted</h2>
-        <p className="text-slate-400 mb-8 text-sm leading-relaxed">
-          Your data has been securely logged in the mainframe. The department head has been notified via quantum link (email).
-        </p>
-        <button onClick={onReset} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-lg font-semibold transition-all shadow-[0_0_15px_rgba(8,145,178,0.4)]">
-          Return to Dashboard
-        </button>
+        <p className="text-slate-400 mb-8 text-sm leading-relaxed">Your data has been securely logged in the mainframe. The department head has been notified via quantum link (email).</p>
+        <button onClick={onReset} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-lg font-semibold transition-all shadow-[0_0_15px_rgba(8,145,178,0.4)]">Return to Dashboard</button>
       </div>
     );
   }
@@ -390,23 +351,14 @@ const App = () => {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="col-span-full mb-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">
-            {currentUser ? `Welcome, ${currentUser.displayName.split(' ')[0]}.` : "Access Granted."}
-          </h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">{currentUser ? `Welcome, ${currentUser.displayName.split(' ')[0]}.` : "Access Granted."}</h2>
           <p className="text-slate-400 text-lg">Select a sector to initialize a request.</p>
         </div>
         {cards.map((card) => (
-          <div 
-            key={card.id} 
-            onClick={() => onViewChange(card.id)} 
-            className={`group relative bg-slate-900/40 backdrop-blur-sm rounded-2xl p-6 cursor-pointer border border-slate-800 transition-all duration-300 hover:-translate-y-1 ${card.bg}`}
-          >
+          <div key={card.id} onClick={() => onViewChange(card.id)} className={`group relative bg-slate-900/40 backdrop-blur-sm rounded-2xl p-6 cursor-pointer border border-slate-800 transition-all duration-300 hover:-translate-y-1 ${card.bg}`}>
             {drafts[card.id] && (<span className="absolute top-4 right-4 bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1"><Save size={12} /> RESUME</span>)}
-            <div className={`w-14 h-14 rounded-xl bg-slate-800/50 flex items-center justify-center mb-5 ${card.color} transition-transform group-hover:scale-110 duration-300`}>
-                <card.icon size={28} />
-            </div>
-            <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">{card.title}</h3>
-            <p className="text-slate-400 text-sm leading-relaxed">{card.desc}</p>
+            <div className={`w-14 h-14 rounded-xl bg-slate-800/50 flex items-center justify-center mb-5 ${card.color} transition-transform group-hover:scale-110 duration-300`}><card.icon size={28} /></div>
+            <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">{card.title}</h3><p className="text-slate-400 text-sm leading-relaxed">{card.desc}</p>
           </div>
         ))}
       </div>
@@ -414,35 +366,21 @@ const App = () => {
   }
 
   function ContactSection({ initialData = {}, currentUser }) {
+    // ... same as before
     const defaultName = currentUser?.displayName || initialData.fullName || '';
     const defaultEmail = currentUser?.email || initialData.email || '';
     return (
       <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800 mb-6">
         <h3 className="text-lg font-semibold text-cyan-400 mb-4 flex items-center gap-2"><User size={18} /> Identity Verification</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Designation</label>
-            <input name="requestName" type="text" defaultValue={initialData.requestName || ''} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all" placeholder="e.g. Football Video" required />
-          </div>
-          <div>
-            <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Full Name</label>
-            <input name="fullName" type="text" defaultValue={defaultName} readOnly={!!currentUser} className={`w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all ${currentUser ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="Jane Doe" required />
-          </div>
-          <div>
-            <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Comm Link (Email)</label>
-            <input name="email" type="email" defaultValue={defaultEmail} readOnly={!!currentUser} className={`w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all ${currentUser ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="jdoe@salpointe.org" required />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Clearance Level</label>
-            <select name="role" defaultValue={initialData.role || 'Student'} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all">
-                <option>Student</option><option>Faculty / Staff</option><option>Club Representative</option>
-            </select>
-          </div>
+          <div className="md:col-span-2"><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Designation</label><input name="requestName" type="text" defaultValue={initialData.requestName || ''} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all" placeholder="e.g. Football Video" required /></div>
+          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Full Name</label><input name="fullName" type="text" defaultValue={defaultName} readOnly={!!currentUser} className={`w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all ${currentUser ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="Jane Doe" required /></div>
+          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Comm Link (Email)</label><input name="email" type="email" defaultValue={defaultEmail} readOnly={!!currentUser} className={`w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all ${currentUser ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="jdoe@salpointe.org" required /></div>
+          <div className="md:col-span-2"><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Clearance Level</label><select name="role" defaultValue={initialData.role || 'Student'} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"><option>Student</option><option>Faculty / Staff</option><option>Club Representative</option></select></div>
         </div>
       </div>
     );
   }
-
 
   // --- UPDATED: Inventory Manager ---
   function InventoryManager({ inventory, setInventory }) {
@@ -452,6 +390,11 @@ const App = () => {
     const [newItemCount, setNewItemCount] = useState(1);
     const [newItemCategory, setNewItemCategory] = useState('film');
     const [newItemTraining, setNewItemTraining] = useState(false);
+
+    // Edit Item State
+    const [editingKey, setEditingKey] = useState(null);
+    const [editName, setEditName] = useState('');
+    const [editTraining, setEditTraining] = useState(false);
 
     const handleChange = (item, field, value) => {
         setLocalInventory(prev => ({
@@ -471,7 +414,8 @@ const App = () => {
     const handleAddItem = (e) => {
         e.preventDefault();
         if (!newItemName) return;
-        const name = newItemTraining ? `${newItemName} *` : newItemName; // Append asterisk if training needed
+        const name = newItemTraining ? `${newItemName} *` : newItemName;
+        if (localInventory[name]) { alert("Item already exists."); return; }
         setLocalInventory(prev => ({
             ...prev,
             [name]: {
@@ -485,6 +429,49 @@ const App = () => {
         setNewItemTraining(false);
     };
 
+    // START EDIT
+    const startEditing = (key, data) => {
+        setEditingKey(key);
+        setEditName(key.replace(' *', '').replace('*', '')); // Strip existing asterisk
+        setEditTraining(data.requiresTraining || false);
+    };
+
+    // CANCEL EDIT
+    const cancelEditing = () => {
+        setEditingKey(null);
+        setEditName('');
+        setEditTraining(false);
+    };
+
+    // SAVE EDIT (RENAME)
+    const saveEdit = () => {
+        if (!editName.trim()) return;
+        
+        const baseName = editName.trim();
+        const newKey = editTraining ? `${baseName} *` : baseName;
+        
+        const itemData = localInventory[editingKey];
+        const newData = { ...itemData, requiresTraining: editTraining };
+
+        const updatedInventory = { ...localInventory };
+        
+        // If key changed (rename or training toggle change), delete old and add new
+        if (newKey !== editingKey) {
+            if (updatedInventory[newKey]) {
+                alert("An item with this name already exists.");
+                return;
+            }
+            delete updatedInventory[editingKey];
+            updatedInventory[newKey] = newData;
+        } else {
+            // Just update data if key is same
+            updatedInventory[newKey] = newData;
+        }
+
+        setLocalInventory(updatedInventory);
+        setEditingKey(null);
+    };
+
     const handleSave = async () => {
         setSaving(true);
         try { await setDoc(doc(db, "settings", "inventory_v2"), localInventory); setInventory(localInventory); alert("Inventory matrix updated."); } 
@@ -492,7 +479,6 @@ const App = () => {
         setSaving(false);
     };
 
-    // Group for display
     const groupedItems = { film: [], photo: [], culinary: [], general: [] };
     Object.entries(localInventory).forEach(([name, data]) => {
         if (groupedItems[data.category]) groupedItems[data.category].push({ name, ...data });
@@ -506,31 +492,13 @@ const App = () => {
                 <button onClick={handleSave} disabled={saving} className="bg-amber-600 hover:bg-amber-500 text-slate-900 px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 shadow-[0_0_15px_rgba(245,158,11,0.3)]">{saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} {saving ? 'Processing...' : 'Save Changes'}</button>
             </div>
             
-            {/* ADD NEW ITEM PANEL */}
             <div className="p-6 bg-slate-900/30 border-b border-slate-800">
                 <h3 className="text-sm font-mono text-cyan-500 uppercase mb-3">Add New Asset</h3>
                 <form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1 w-full">
-                        <label className="block text-xs text-slate-500 mb-1">Item Name</label>
-                        <input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" required />
-                    </div>
-                    <div className="w-24">
-                         <label className="block text-xs text-slate-500 mb-1">Count</label>
-                         <input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" />
-                    </div>
-                    <div className="w-32">
-                         <label className="block text-xs text-slate-500 mb-1">Category</label>
-                         <select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none">
-                             <option value="film">Film</option>
-                             <option value="photo">Photo</option>
-                             <option value="culinary">Culinary</option>
-                             <option value="general">General</option>
-                         </select>
-                    </div>
-                    <div className="flex items-center gap-2 pb-2">
-                        <input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500" />
-                        <label className="text-sm text-slate-400">Requires Training</label>
-                    </div>
+                    <div className="flex-1 w-full"><label className="block text-xs text-slate-500 mb-1">Item Name</label><input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" required /></div>
+                    <div className="w-24"><label className="block text-xs text-slate-500 mb-1">Count</label><input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" /></div>
+                    <div className="w-32"><label className="block text-xs text-slate-500 mb-1">Category</label><select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"><option value="film">Film</option><option value="photo">Photo</option><option value="culinary">Culinary</option><option value="general">General</option></select></div>
+                    <div className="flex items-center gap-2 pb-2"><input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500" /><label className="text-sm text-slate-400">Training Req.</label></div>
                     <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-medium flex items-center gap-1"><Plus size={16}/> Add</button>
                 </form>
             </div>
@@ -538,17 +506,33 @@ const App = () => {
             <div className="p-6 space-y-8">
                 {Object.entries(groupedItems).map(([cat, items]) => (
                     <div key={cat}>
-                        <h3 className="text-lg font-bold text-white capitalize mb-4 border-b border-slate-800 pb-2">{cat} Inventory</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <h3 className="text-lg font-bold text-white capitalize mb-4 border-b border-slate-800 pb-2 text-emerald-400">{cat} Inventory</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {items.map((item) => (
-                                <div key={item.name} className="bg-slate-800/30 p-4 rounded-lg border border-slate-700 flex justify-between items-center hover:border-slate-600 transition-colors">
-                                    <div className="flex-1 mr-4">
-                                        <span className="font-mono text-slate-300 text-sm block truncate">{item.name.replace('*','')}</span>
-                                        {item.requiresTraining && <span className="text-[10px] text-red-400 uppercase bg-red-900/20 px-1 rounded">Training Req.</span>}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <input type="number" min="0" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value))} className="w-16 p-1 bg-slate-950 border border-slate-700 rounded text-center font-bold text-cyan-400 focus:border-cyan-500 outline-none text-sm"/>
-                                        <button onClick={() => handleDelete(item.name)} className="text-slate-600 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
+                                <div key={item.name} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700 flex justify-between items-center hover:border-slate-600 transition-colors">
+                                    {editingKey === item.name ? (
+                                        // EDIT MODE
+                                        <div className="flex-1 flex items-center gap-2 mr-2">
+                                            <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 bg-slate-950 border border-cyan-500 rounded p-1 text-white text-sm outline-none" autoFocus />
+                                            <label className="flex items-center gap-1 text-xs text-slate-400"><input type="checkbox" checked={editTraining} onChange={e => setEditTraining(e.target.checked)} /> Train</label>
+                                            <button onClick={saveEdit} className="text-green-500 hover:text-green-400 p-1"><Check size={18}/></button>
+                                            <button onClick={cancelEditing} className="text-red-500 hover:text-red-400 p-1"><X size={18}/></button>
+                                        </div>
+                                    ) : (
+                                        // VIEW MODE
+                                        <div className="flex-1 mr-4 flex items-center justify-between">
+                                            <div>
+                                                <span className="font-mono text-slate-300 text-sm block truncate">{item.name.replace(' *','').replace('*','')}</span>
+                                                {item.requiresTraining && <span className="text-[10px] text-red-400 uppercase bg-red-900/20 px-1 rounded">Training Req.</span>}
+                                            </div>
+                                            <button onClick={() => startEditing(item.name, item)} className="text-slate-600 hover:text-cyan-400 p-1 ml-2"><Edit2 size={14}/></button>
+                                        </div>
+                                    )}
+                                    
+                                    <div className="flex items-center gap-2 border-l border-slate-700 pl-3">
+                                        <span className="text-xs text-slate-500 uppercase">Qty</span>
+                                        <input type="number" min="0" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value))} className="w-14 p-1 bg-slate-950 border border-slate-700 rounded text-center font-bold text-cyan-400 focus:border-cyan-500 outline-none text-sm"/>
+                                        <button onClick={() => handleDelete(item.name)} className="text-slate-600 hover:text-red-500 transition-colors ml-1"><Trash2 size={16}/></button>
                                     </div>
                                 </div>
                             ))}
@@ -561,7 +545,7 @@ const App = () => {
   }
 
   function AnalyticsView() {
-    // ... (Same as before)
+    // ... (same)
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, deptCounts: {}, topEquipment: [] });
     useEffect(() => {
@@ -600,8 +584,9 @@ const App = () => {
     );
   }
 
+  // ... (RequestQueueView, FormContainer, Forms, CalendarView - same logic, just keeping file integrity)
+  // Re-including core functions to ensure single-file completeness
   function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
-    // ... (Same as before)
     const [requests, setRequests] = useState([]);
     const [filter, setFilter] = useState('all');
     const [loading, setLoading] = useState(true);
@@ -678,7 +663,6 @@ const App = () => {
   }
 
   function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser, blackouts = [] }) { 
-    // ... (Existing Code)
     const formRef = useRef(null);
     const draftKey = getDraftKey(title);
     const [showExitPrompt, setShowExitPrompt] = useState(false);
@@ -728,13 +712,12 @@ const App = () => {
     );
   }
 
-  // --- UPDATED FORMS (FILM & PHOTO USE DYNAMIC INVENTORY) ---
-
   function FilmForm({ setSubmitted, onCancel, currentUser, inventory, blackouts }) { 
     const title = 'Film';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     const [requestType, setRequestType] = useState(initialData.requestType || 'checkout'); 
+    
     const [availableStock, setAvailableStock] = useState({});
     const [datesSelected, setDatesSelected] = useState(false);
     const [dateRange, setDateRange] = useState({ start: initialData.checkoutDate || '', end: initialData.returnDate || '' });
@@ -758,7 +741,7 @@ const App = () => {
                 }
             });
             const stockStatus = {};
-            // DYNAMIC: Iterate over inventory state, not hardcoded list
+            // DYNAMIC: Iterate over inventory state
             Object.keys(inventory).forEach(item => { 
                 if (inventory[item].category === 'film' || inventory[item].category === 'general') {
                     stockStatus[item] = Math.max(0, inventory[item].count - (usageCounts[item] || 0)); 
@@ -830,6 +813,57 @@ const App = () => {
     );
   }
 
+  function GraphicDesignForm({ setSubmitted, onCancel, currentUser }) {
+    const title = 'Graphic';
+    const draftKey = getDraftKey(title);
+    const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
+    return (
+      <FormContainer title={title} icon={PenTool} colorClass="bg-purple-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel} currentUser={currentUser}>
+        <div className="space-y-6">
+          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Type</label><select name="projectType" defaultValue={initialData.projectType} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-purple-500 outline-none"><option>Event Poster / Flyer</option><option>Logo Design</option><option>Website Design</option><option>T-Shirt / Merch</option></select></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Dimensions</label><input name="dimensions" defaultValue={initialData.dimensions} type="text" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-purple-500 outline-none" placeholder="e.g., 11x17" /></div>
+            <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Deadline</label><input name="deadline" defaultValue={initialData.deadline} type="date" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-purple-500 outline-none" required /></div>
+          </div>
+          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Creative Brief</label><textarea name="brief" defaultValue={initialData.brief} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-purple-500 outline-none h-32" placeholder="Text content, colors, inspiration..." required></textarea></div>
+        </div>
+      </FormContainer>
+    );
+  }
+
+  function BusinessForm({ setSubmitted, onCancel, currentUser }) {
+    const title = 'Business';
+    const draftKey = getDraftKey(title);
+    const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
+    return (
+      <FormContainer title={title} icon={Briefcase} colorClass="bg-emerald-600" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel} currentUser={currentUser}>
+        <div className="space-y-6">
+          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Support Required</label><select name="assistanceType" defaultValue={initialData.assistanceType} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-emerald-500 outline-none"><option>Business Plan Review</option><option>Financial Modeling Help</option><option>Marketing Strategy</option><option>General Mentorship</option></select></div>
+          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Concept Overview</label><textarea name="description" defaultValue={initialData.description} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-emerald-500 outline-none h-40" placeholder="Briefly describe your product or service..." required></textarea></div>
+        </div>
+      </FormContainer>
+    );
+  }
+
+  function CulinaryForm({ setSubmitted, onCancel, currentUser }) {
+    const title = 'Culinary';
+    const draftKey = getDraftKey(title);
+    const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
+    return (
+      <FormContainer title={title} icon={Utensils} colorClass="bg-orange-500" setSubmitted={setSubmitted} initialData={initialData} onCancel={onCancel} currentUser={currentUser}>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input name="eventDate" defaultValue={initialData.eventDate} type="date" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-amber-500 outline-none" required /></div>
+            <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Serve Time</label><input name="serveTime" defaultValue={initialData.serveTime} type="time" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-amber-500 outline-none" required /></div>
+            <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Guest Count</label><input name="guestCount" defaultValue={initialData.guestCount} type="number" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-amber-500 outline-none" min="1" placeholder="50" required /></div>
+          </div>
+          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Service Style</label><select name="serviceStyle" defaultValue={initialData.serviceStyle} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-amber-500 outline-none"><option>Buffet Style</option><option>Boxed Lunches</option><option>Plated Service</option><option>Appetizers</option></select></div>
+          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Dietary Requirements</label><textarea name="menuNotes" defaultValue={initialData.menuNotes} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-amber-500 outline-none h-24" placeholder="Preferences, allergies, restrictions..." required></textarea></div>
+        </div>
+      </FormContainer>
+    );
+  }
+
   function PhotoForm({ setSubmitted, onCancel, currentUser, inventory, blackouts }) { 
     const title = 'Photo';
     const draftKey = getDraftKey(title);
@@ -839,34 +873,56 @@ const App = () => {
     const [availableStock, setAvailableStock] = useState({});
     const [datesSelected, setDatesSelected] = useState(false);
     const [dateRange, setDateRange] = useState({ start: initialData.pickupDate || '', end: initialData.returnDate || '' });
-    const handleDateChange = (e) => { const newDates = { ...dateRange, [e.target.name === 'pickupDate' ? 'start' : 'end']: e.target.value }; setDateRange(newDates); };
+
+    const handleDateChange = (e) => {
+        const newDates = { ...dateRange, [e.target.name === 'pickupDate' ? 'start' : 'end']: e.target.value };
+        setDateRange(newDates);
+    };
 
     useEffect(() => {
         const calculateAvailability = async () => {
-            if (!dateRange.start || !dateRange.end || requestType !== 'checkout') { setDatesSelected(false); return; }
+            if (!dateRange.start || !dateRange.end || requestType !== 'checkout') {
+                setDatesSelected(false);
+                return;
+            }
             setDatesSelected(true);
-            const q = query(collection(db, "requests"), where("dept", "==", "Photo"), where("requestType", "==", "checkout"));
+
+            const q = query(
+                collection(db, "requests"), 
+                where("dept", "==", "Photo"),
+                where("requestType", "==", "checkout") 
+            );
+            
             const querySnapshot = await getDocs(q);
             const usageCounts = {};
+
             querySnapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.status === 'Denied' || data.status === 'Completed') return;
-                if (data.pickupDate <= dateRange.end && data.returnDate >= dateRange.start) {
+
+                const reqStart = data.pickupDate; 
+                const reqEnd = data.returnDate;
+                
+                if (reqStart <= dateRange.end && reqEnd >= dateRange.start) {
                     if (data.equipment) {
                         const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment];
-                        items.forEach(item => { usageCounts[item] = (usageCounts[item] || 0) + 1; });
+                        items.forEach(item => {
+                            usageCounts[item] = (usageCounts[item] || 0) + 1;
+                        });
                     }
                 }
             });
+
             const stockStatus = {};
-            // DYNAMIC: Iterate over inventory state
             Object.keys(inventory).forEach(item => { 
-                if (inventory[item].category === 'photo' || inventory[item].category === 'general') {
-                    stockStatus[item] = Math.max(0, inventory[item].count - (usageCounts[item] || 0)); 
-                }
+                const total = inventory[item].count; // Fix: Access .count
+                const used = usageCounts[item] || 0;
+                stockStatus[item] = Math.max(0, total - used);
             });
+            
             setAvailableStock(stockStatus);
         };
+
         calculateAvailability();
     }, [dateRange, requestType, inventory]); 
 
