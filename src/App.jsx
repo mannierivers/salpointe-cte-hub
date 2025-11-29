@@ -52,7 +52,7 @@ import {
   Lightbulb,     
   CheckSquare,
   Gamepad2,
-  Trophy // Added Trophy for high score
+  Trophy 
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -81,7 +81,7 @@ const ALLOWED_ADMINS = [
     "erivers@salpointe.org" 
 ];
 
-// *** DEFAULT FALLBACK INVENTORY ***
+// *** NEW STRUCTURED INVENTORY ***
 const DEFAULT_INVENTORY = {
   'Cinema Camera Kit': { count: 1, category: 'film', requiresTraining: true },
   'Gimbal / Stabilizer': { count: 6, category: 'film', requiresTraining: true },
@@ -89,12 +89,14 @@ const DEFAULT_INVENTORY = {
   'DJI Flip Drone': { count: 1, category: 'film', requiresTraining: true },
   'Lighting Kit': { count: 6, category: 'film', requiresTraining: false },
   'Tripod': { count: 8, category: 'general', requiresTraining: false },
+  
   'DSLR Camera Body': { count: 6, category: 'photo', requiresTraining: true },
   'Zoom Lens (18-55mm)': { count: 6, category: 'photo', requiresTraining: false },
   'Telephoto Lens (70-200mm)': { count: 2, category: 'photo', requiresTraining: false },
   'Portrait Lens (50mm)': { count: 3, category: 'photo', requiresTraining: false },
   'SD Card Reader': { count: 5, category: 'photo', requiresTraining: false },
   'Flash Unit': { count: 3, category: 'photo', requiresTraining: false },
+
   'Serving Trays': { count: 10, category: 'culinary', requiresTraining: false },
   'Chafing Dishes': { count: 4, category: 'culinary', requiresTraining: false }
 };
@@ -274,6 +276,7 @@ const App = () => {
             {currentView === Departments.LANDING && <LandingPage currentUser={currentUser} onLogin={handleLogin} onEnter={goToDashboard} />}
             {currentView === Departments.DASHBOARD && <ServiceGrid onViewChange={setCurrentView} currentUser={currentUser} />}
             
+            {/* Forms receive blackouts for validation */}
             {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
             {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
             {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
@@ -286,8 +289,6 @@ const App = () => {
             {currentView === Departments.ANALYTICS && adminMode && <AnalyticsView />}
             {currentView === Departments.INVENTORY && adminMode && <InventoryManager inventory={inventory} setInventory={setInventory} />}
             {currentView === Departments.FEEDBACK && <FeedbackView currentUser={currentUser} adminMode={adminMode} setSubmitted={setSubmitted} onCancel={goToDashboard} />}
-            
-            {/* NEW: GAME VIEW */}
             {currentView === Departments.GAME && <GameView onExit={goToDashboard} />}
           </>
         )}
@@ -310,293 +311,108 @@ const App = () => {
     </div>
   );
 
-  // --- NEW: 8-BIT RUNNER GAME COMPONENT ---
-  function GameView({ onExit }) {
-      const canvasRef = useRef(null);
-      const [gameState, setGameState] = useState('start'); // start, playing, gameover
-      const [score, setScore] = useState(0);
-      const [highScore, setHighScore] = useState(parseInt(localStorage.getItem('lancer_highscore') || '0'));
-      
-      // Game Constants
-      const GRAVITY = 0.6;
-      const JUMP_FORCE = -10;
-      const SPEED = 5;
-      const GROUND_HEIGHT = 50;
-
-      // Game State Refs (for loop)
-      const playerRef = useRef({ x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false });
-      const obstaclesRef = useRef([]);
-      const frameRef = useRef(0);
-      const scoreRef = useRef(0);
-      const loopRef = useRef(null);
-
-      const jump = () => {
-          if (!playerRef.current.isJumping) {
-              playerRef.current.vy = JUMP_FORCE;
-              playerRef.current.isJumping = true;
-          }
-      };
-
-      const startGame = () => {
-          setGameState('playing');
-          setScore(0);
-          scoreRef.current = 0;
-          playerRef.current = { x: 50, y: 200, vy: 0, width: 40, height: 40, isJumping: false };
-          obstaclesRef.current = [];
-          frameRef.current = 0;
-          gameLoop();
-      };
-
-      const gameLoop = () => {
-          const canvas = canvasRef.current;
-          if (!canvas) return;
-          const ctx = canvas.getContext('2d');
-
-          // Clear Screen
-          ctx.fillStyle = '#0f172a'; // Slate 900
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          // Ground Line
-          ctx.strokeStyle = '#22d3ee'; // Cyan
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(0, canvas.height - GROUND_HEIGHT);
-          ctx.lineTo(canvas.width, canvas.height - GROUND_HEIGHT);
-          ctx.stroke();
-
-          // Update Player
-          const p = playerRef.current;
-          p.vy += GRAVITY;
-          p.y += p.vy;
-
-          // Ground Collision
-          if (p.y > canvas.height - GROUND_HEIGHT - p.height) {
-              p.y = canvas.height - GROUND_HEIGHT - p.height;
-              p.vy = 0;
-              p.isJumping = false;
-          }
-
-          // Draw Player (Lancer Emoji)
-          ctx.font = '32px Arial';
-          ctx.fillText('🏇', p.x, p.y + 32);
-
-          // Spawn Obstacles
-          frameRef.current++;
-          if (frameRef.current % 100 === 0) { // Spawn rate
-              const type = Math.random() > 0.5 ? '📹' : 'F'; // Camera or Grade F
-              obstaclesRef.current.push({
-                  x: canvas.width,
-                  y: canvas.height - GROUND_HEIGHT - 30, // Ground level
-                  width: 30,
-                  height: 30,
-                  type: type
-              });
-          }
-
-          // Update & Draw Obstacles
-          for (let i = obstaclesRef.current.length - 1; i >= 0; i--) {
-              const obs = obstaclesRef.current[i];
-              obs.x -= SPEED;
-
-              // Draw Obstacle
-              ctx.fillStyle = obs.type === 'F' ? '#ef4444' : '#fbbf24';
-              ctx.font = '28px Arial';
-              ctx.fillText(obs.type, obs.x, obs.y + 28);
-
-              // Collision Detection
-              if (
-                  p.x < obs.x + obs.width &&
-                  p.x + p.width > obs.x &&
-                  p.y < obs.y + obs.height &&
-                  p.y + p.height > obs.y
-              ) {
-                  handleGameOver();
-                  return; // Stop loop
-              }
-
-              // Remove off-screen
-              if (obs.x + obs.width < 0) {
-                  obstaclesRef.current.splice(i, 1);
-                  scoreRef.current += 10;
-                  setScore(scoreRef.current);
-              }
-          }
-
-          // Score Draw
-          ctx.fillStyle = '#fff';
-          ctx.font = '16px monospace';
-          ctx.fillText(`SCORE: ${scoreRef.current}`, 10, 20);
-
-          loopRef.current = requestAnimationFrame(gameLoop);
-      };
-
-      const handleGameOver = () => {
-          cancelAnimationFrame(loopRef.current);
-          setGameState('gameover');
-          if (scoreRef.current > highScore) {
-              setHighScore(scoreRef.current);
-              localStorage.setItem('lancer_highscore', scoreRef.current.toString());
-          }
-      };
-
-      // Input Handler
-      useEffect(() => {
-          const handleKeyDown = (e) => {
-              if (e.code === 'Space' || e.code === 'ArrowUp') {
-                  if (gameState === 'playing') jump();
-                  else if (gameState !== 'playing') startGame(); // Restart on space
-              }
-          };
-          window.addEventListener('keydown', handleKeyDown);
-          return () => window.removeEventListener('keydown', handleKeyDown);
-      }, [gameState]);
-
-      return (
-          <div className="max-w-3xl mx-auto bg-black border-4 border-slate-700 rounded-xl overflow-hidden font-mono shadow-2xl relative animate-fade-in select-none">
-              {/* CRT Overlay */}
-              <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]"></div>
-              
-              <div className="bg-slate-900 p-4 border-b-4 border-slate-700 flex justify-between items-center relative z-20">
-                  <div className="text-green-400 text-xs flex items-center gap-2"><Gamepad2 size={14}/> LANCER_RUN.EXE</div>
-                  <div className="text-yellow-400 text-xs flex items-center gap-2"><Trophy size={14}/> HI-SCORE: {highScore}</div>
-                  <button onClick={onExit} className="text-red-500 hover:text-red-400 text-xs uppercase font-bold">[ EXIT SYSTEM ]</button>
-              </div>
-
-              <div className="relative bg-slate-950" style={{ height: '300px' }}>
-                  <canvas 
-                      ref={canvasRef} 
-                      width={700} 
-                      height={300} 
-                      className="w-full h-full block"
-                  />
-
-                  {gameState === 'start' && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-20">
-                          <h2 className="text-4xl font-bold text-cyan-400 mb-4 tracking-widest glitch-text">LANCER RUN</h2>
-                          <p className="text-slate-300 text-sm mb-6">Space/Up to Jump. Avoid the F's!</p>
-                          <button onClick={startGame} className="px-6 py-2 bg-green-600 hover:bg-green-500 text-black font-bold rounded blink-anim">INSERT COIN (START)</button>
-                      </div>
-                  )}
-
-                  {gameState === 'gameover' && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/40 z-20 backdrop-blur-sm">
-                          <h2 className="text-4xl font-bold text-red-500 mb-2">CRITICAL FAILURE</h2>
-                          <p className="text-white text-xl mb-6">FINAL SCORE: {score}</p>
-                          <button onClick={startGame} className="px-6 py-2 bg-white text-black font-bold rounded hover:bg-slate-200">RETRY MISSION</button>
-                      </div>
-                  )}
-              </div>
-          </div>
-      );
-  }
-
-  // ... LandingPage, SuccessView, ServiceGrid, ContactSection, InventoryManager, AnalyticsView, RequestQueueView, FormContainer, FilmForm, GraphicDesignForm, BusinessForm, CulinaryForm, PhotoForm, CalendarView, MyRequestsView, FeedbackView ...
-  // (All previous components remain exactly as they were. I will ensure they are present in the final output.)
-  
+  // ... (Sub-components: LandingPage, SuccessView, ServiceGrid, ContactSection are same as previous turn)
   function LandingPage({ currentUser, onLogin, onEnter }) {
-    // ... same
-      return (
-        <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-12 animate-fade-in">
-            <div className="space-y-6 max-w-4xl mx-auto">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-950/50 border border-cyan-500/30 text-cyan-400 text-xs font-mono uppercase tracking-widest animate-pulse">
-                    <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]"></div>
-                    System Online v1.0
-                </div>
-                <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight leading-tight">
-                    Master the Tools. <br/>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Create Without Limits.</span>
-                </h1>
-                <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                    Your direct link to the CTE professional inventory. Secure the assets you need to build your portfolio—from cinema cameras to culinary prep. If you can dream it, you can reserve it.
-                </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-                    {currentUser ? (
-                        <button onClick={onEnter} className="group relative px-8 py-4 bg-cyan-600 hover:bg-cyan-500 text-white text-lg font-bold rounded-xl shadow-[0_0_20px_rgba(8,145,178,0.4)] transition-all flex items-center gap-3 w-full sm:w-auto justify-center overflow-hidden">
-                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div><Zap size={24} className="fill-white" /> Initialize Hub
-                        </button>
-                    ) : (
-                        <button onClick={onLogin} className="group px-8 py-4 bg-white text-slate-900 hover:bg-slate-200 text-lg font-bold rounded-xl shadow-lg transition-all flex items-center gap-3 w-full sm:w-auto justify-center"><LogIn size={24} /> Login to Access</button>
-                    )}
-                </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full text-left">
-                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-red-500/30 transition-colors group"><div className="w-12 h-12 bg-red-900/20 rounded-lg flex items-center justify-center text-red-500 mb-4 group-hover:scale-110 transition-transform"><FileX size={24} /></div><h3 className="text-xl font-bold text-white mb-2">Paperless Protocol</h3><p className="text-slate-400 text-sm">Deprecated legacy analog logs. Requests are now digital, trackable, and impossible to lose.</p></div>
-                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-cyan-500/30 transition-colors group"><div className="w-12 h-12 bg-cyan-900/20 rounded-lg flex items-center justify-center text-cyan-400 mb-4 group-hover:scale-110 transition-transform"><Cpu size={24} /></div><h3 className="text-xl font-bold text-white mb-2">Real-Time Inventory</h3><p className="text-slate-400 text-sm">Live database tracking prevents double-bookings. See exactly what gear is available, instantly.</p></div>
-                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-emerald-500/30 transition-colors group"><div className="w-12 h-12 bg-emerald-900/20 rounded-lg flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition-transform"><ShieldCheck size={24} /></div><h3 className="text-xl font-bold text-white mb-2">Secure Access</h3><p className="text-slate-400 text-sm">Authenticated via Salpointe Google Workspace. Your data is protected and your history is saved.</p></div>
-            </div>
-        </div>
-      );
-  }
-
-  function SuccessView({ onReset }) {
-    // ... same
     return (
-      <div className="max-w-lg mx-auto bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 p-8 text-center animate-fade-in-up">
-        <div className="w-20 h-20 bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-400 shadow-[0_0_20px_rgba(74,222,128,0.2)]"><CheckCircle size={40} /></div>
-        <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">Request Transmitted</h2>
-        <p className="text-slate-400 mb-8 text-sm leading-relaxed">Your data has been securely logged in the mainframe. The department head has been notified via quantum link (email).</p>
-        <button onClick={onReset} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-lg font-semibold transition-all shadow-[0_0_15px_rgba(8,145,178,0.4)]">Return to Dashboard</button>
-      </div>
-    );
-  }
-
-  function ServiceGrid({ onViewChange, currentUser }) {
-    // ... same
-    const [drafts, setDrafts] = useState({});
-    useEffect(() => {
-        const checkDrafts = () => {
-            const status = {};
-            const map = { [Departments.FILM]: 'Film', [Departments.GRAPHIC]: 'Graphic', [Departments.BUSINESS]: 'Business', [Departments.CULINARY]: 'Culinary', [Departments.PHOTO]: 'Photo' };
-            Object.keys(map).forEach(deptId => { const key = getDraftKey(map[deptId]); if (localStorage.getItem(key)) status[deptId] = true; });
-            setDrafts(status);
-        };
-        checkDrafts();
-    }, []);
-
-    const cards = [
-      { id: Departments.FILM, title: "Film & TV", icon: Video, desc: "Checkout cameras, drones, and broadcast equipment.", color: "text-cyan-400", bg: "group-hover:shadow-cyan-500/20 group-hover:border-cyan-500/50" },
-      { id: Departments.GRAPHIC, title: "Graphic Design", icon: PenTool, desc: "Request logos, posters, websites, and creative assets.", color: "text-fuchsia-400", bg: "group-hover:shadow-fuchsia-500/20 group-hover:border-fuchsia-500/50" },
-      { id: Departments.BUSINESS, title: "Business", icon: Briefcase, desc: "Submit business plans and startup consultations.", color: "text-emerald-400", bg: "group-hover:shadow-emerald-500/20 group-hover:border-emerald-500/50" },
-      { id: Departments.CULINARY, title: "Culinary Arts", icon: Utensils, desc: "Catering services for school clubs and events.", color: "text-amber-400", bg: "group-hover:shadow-amber-500/20 group-hover:border-amber-500/50" },
-      { id: Departments.PHOTO, title: "Photography", icon: Camera, desc: "Reserve DSLR bodies, lenses, and event coverage.", color: "text-pink-400", bg: "group-hover:shadow-pink-500/20 group-hover:border-pink-500/50" }
-    ];
-
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="col-span-full mb-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">{currentUser ? `Welcome, ${currentUser.displayName.split(' ')[0]}.` : "Access Granted."}</h2>
-          <p className="text-slate-400 text-lg">Select a sector to initialize a request.</p>
-        </div>
-        {cards.map((card) => (
-          <div key={card.id} onClick={() => onViewChange(card.id)} className={`group relative bg-slate-900/40 backdrop-blur-sm rounded-2xl p-6 cursor-pointer border border-slate-800 transition-all duration-300 hover:-translate-y-1 ${card.bg}`}>
-            {drafts[card.id] && (<span className="absolute top-4 right-4 bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1"><Save size={12} /> RESUME</span>)}
-            <div className={`w-14 h-14 rounded-xl bg-slate-800/50 flex items-center justify-center mb-5 ${card.color} transition-transform group-hover:scale-110 duration-300`}><card.icon size={28} /></div>
-            <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">{card.title}</h3><p className="text-slate-400 text-sm leading-relaxed">{card.desc}</p>
+      <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-12 animate-fade-in">
+          <div className="space-y-6 max-w-4xl mx-auto">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-950/50 border border-cyan-500/30 text-cyan-400 text-xs font-mono uppercase tracking-widest animate-pulse">
+                  <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]"></div>
+                  System Online v1.0
+              </div>
+              <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight leading-tight">
+                  Master the Tools. <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Create Without Limits.</span>
+              </h1>
+              <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                  Your direct link to the CTE professional inventory. Secure the assets you need to build your portfolio—from cinema cameras to culinary prep. If you can dream it, you can reserve it.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+                  {currentUser ? (
+                      <button onClick={onEnter} className="group relative px-8 py-4 bg-cyan-600 hover:bg-cyan-500 text-white text-lg font-bold rounded-xl shadow-[0_0_20px_rgba(8,145,178,0.4)] transition-all flex items-center gap-3 w-full sm:w-auto justify-center overflow-hidden">
+                          <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div><Zap size={24} className="fill-white" /> Initialize Hub
+                      </button>
+                  ) : (
+                      <button onClick={onLogin} className="group px-8 py-4 bg-white text-slate-900 hover:bg-slate-200 text-lg font-bold rounded-xl shadow-lg transition-all flex items-center gap-3 w-full sm:w-auto justify-center"><LogIn size={24} /> Login to Access</button>
+                  )}
+              </div>
           </div>
-        ))}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full text-left">
+              <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-red-500/30 transition-colors group"><div className="w-12 h-12 bg-red-900/20 rounded-lg flex items-center justify-center text-red-500 mb-4 group-hover:scale-110 transition-transform"><FileX size={24} /></div><h3 className="text-xl font-bold text-white mb-2">Paperless Protocol</h3><p className="text-slate-400 text-sm">Deprecated legacy analog logs. Requests are now digital, trackable, and impossible to lose.</p></div>
+              <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-cyan-500/30 transition-colors group"><div className="w-12 h-12 bg-cyan-900/20 rounded-lg flex items-center justify-center text-cyan-400 mb-4 group-hover:scale-110 transition-transform"><Cpu size={24} /></div><h3 className="text-xl font-bold text-white mb-2">Real-Time Inventory</h3><p className="text-slate-400 text-sm">Live database tracking prevents double-bookings. See exactly what gear is available, instantly.</p></div>
+              <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-emerald-500/30 transition-colors group"><div className="w-12 h-12 bg-emerald-900/20 rounded-lg flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition-transform"><ShieldCheck size={24} /></div><h3 className="text-xl font-bold text-white mb-2">Secure Access</h3><p className="text-slate-400 text-sm">Authenticated via Salpointe Google Workspace. Your data is protected and your history is saved.</p></div>
+          </div>
       </div>
     );
-  }
+}
 
-  function ContactSection({ initialData = {}, currentUser }) {
-    const defaultName = currentUser?.displayName || initialData.fullName || '';
-    const defaultEmail = currentUser?.email || initialData.email || '';
-    return (
-      <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800 mb-6">
-        <h3 className="text-lg font-semibold text-cyan-400 mb-4 flex items-center gap-2"><User size={18} /> Identity Verification</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2"><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Designation</label><input name="requestName" type="text" defaultValue={initialData.requestName || ''} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all" placeholder="e.g. Football Video" required /></div>
-          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Full Name</label><input name="fullName" type="text" defaultValue={defaultName} readOnly={!!currentUser} className={`w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all ${currentUser ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="Jane Doe" required /></div>
-          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Comm Link (Email)</label><input name="email" type="email" defaultValue={defaultEmail} readOnly={!!currentUser} className={`w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all ${currentUser ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="jdoe@salpointe.org" required /></div>
-          <div className="md:col-span-2"><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Clearance Level</label><select name="role" defaultValue={initialData.role || 'Student'} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"><option>Student</option><option>Faculty / Staff</option><option>Club Representative</option></select></div>
+function SuccessView({ onReset }) {
+  return (
+    <div className="max-w-lg mx-auto bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 p-8 text-center animate-fade-in-up">
+      <div className="w-20 h-20 bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-6 text-green-400 shadow-[0_0_20px_rgba(74,222,128,0.2)]"><CheckCircle size={40} /></div>
+      <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">Request Transmitted</h2>
+      <p className="text-slate-400 mb-8 text-sm leading-relaxed">Your data has been securely logged in the mainframe. The department head has been notified via quantum link (email).</p>
+      <button onClick={onReset} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-lg font-semibold transition-all shadow-[0_0_15px_rgba(8,145,178,0.4)]">Return to Dashboard</button>
+    </div>
+  );
+}
+
+function ServiceGrid({ onViewChange, currentUser }) {
+  const [drafts, setDrafts] = useState({});
+  useEffect(() => {
+      const checkDrafts = () => {
+          const status = {};
+          const map = { [Departments.FILM]: 'Film', [Departments.GRAPHIC]: 'Graphic', [Departments.BUSINESS]: 'Business', [Departments.CULINARY]: 'Culinary', [Departments.PHOTO]: 'Photo' };
+          Object.keys(map).forEach(deptId => { const key = getDraftKey(map[deptId]); if (localStorage.getItem(key)) status[deptId] = true; });
+          setDrafts(status);
+      };
+      checkDrafts();
+  }, []);
+
+  const cards = [
+    { id: Departments.FILM, title: "Film & TV", icon: Video, desc: "Checkout cameras, drones, and broadcast equipment.", color: "text-cyan-400", bg: "group-hover:shadow-cyan-500/20 group-hover:border-cyan-500/50" },
+    { id: Departments.GRAPHIC, title: "Graphic Design", icon: PenTool, desc: "Request logos, posters, websites, and creative assets.", color: "text-fuchsia-400", bg: "group-hover:shadow-fuchsia-500/20 group-hover:border-fuchsia-500/50" },
+    { id: Departments.BUSINESS, title: "Business", icon: Briefcase, desc: "Submit business plans and startup consultations.", color: "text-emerald-400", bg: "group-hover:shadow-emerald-500/20 group-hover:border-emerald-500/50" },
+    { id: Departments.CULINARY, title: "Culinary Arts", icon: Utensils, desc: "Catering services for school clubs and events.", color: "text-amber-400", bg: "group-hover:shadow-amber-500/20 group-hover:border-amber-500/50" },
+    { id: Departments.PHOTO, title: "Photography", icon: Camera, desc: "Reserve DSLR bodies, lenses, and event coverage.", color: "text-pink-400", bg: "group-hover:shadow-pink-500/20 group-hover:border-pink-500/50" }
+  ];
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="col-span-full mb-4">
+        <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">{currentUser ? `Welcome, ${currentUser.displayName.split(' ')[0]}.` : "Access Granted."}</h2>
+        <p className="text-slate-400 text-lg">Select a sector to initialize a request.</p>
+      </div>
+      {cards.map((card) => (
+        <div key={card.id} onClick={() => onViewChange(card.id)} className={`group relative bg-slate-900/40 backdrop-blur-sm rounded-2xl p-6 cursor-pointer border border-slate-800 transition-all duration-300 hover:-translate-y-1 ${card.bg}`}>
+          {drafts[card.id] && (<span className="absolute top-4 right-4 bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1"><Save size={12} /> RESUME</span>)}
+          <div className={`w-14 h-14 rounded-xl bg-slate-800/50 flex items-center justify-center mb-5 ${card.color} transition-transform group-hover:scale-110 duration-300`}><card.icon size={28} /></div>
+          <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">{card.title}</h3><p className="text-slate-400 text-sm leading-relaxed">{card.desc}</p>
         </div>
+      ))}
+    </div>
+  );
+}
+
+function ContactSection({ initialData = {}, currentUser }) {
+  const defaultName = currentUser?.displayName || initialData.fullName || '';
+  const defaultEmail = currentUser?.email || initialData.email || '';
+  return (
+    <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-800 mb-6">
+      <h3 className="text-lg font-semibold text-cyan-400 mb-4 flex items-center gap-2"><User size={18} /> Identity Verification</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="md:col-span-2"><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Designation</label><input name="requestName" type="text" defaultValue={initialData.requestName || ''} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all" placeholder="e.g. Football Video" required /></div>
+        <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Full Name</label><input name="fullName" type="text" defaultValue={defaultName} readOnly={!!currentUser} className={`w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all ${currentUser ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="Jane Doe" required /></div>
+        <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Comm Link (Email)</label><input name="email" type="email" defaultValue={defaultEmail} readOnly={!!currentUser} className={`w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all ${currentUser ? 'opacity-70 cursor-not-allowed' : ''}`} placeholder="jdoe@salpointe.org" required /></div>
+        <div className="md:col-span-2"><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Clearance Level</label><select name="role" defaultValue={initialData.role || 'Student'} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"><option>Student</option><option>Faculty / Staff</option><option>Club Representative</option></select></div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
 
+  // --- UPDATED: Inventory Manager ---
   function InventoryManager({ inventory, setInventory }) {
-    // ... same
     const [localInventory, setLocalInventory] = useState(inventory);
     const [saving, setSaving] = useState(false);
     const [newItemName, setNewItemName] = useState('');
@@ -607,42 +423,170 @@ const App = () => {
     const [editName, setEditName] = useState('');
     const [editTraining, setEditTraining] = useState(false);
 
-    const handleChange = (item, field, value) => { setLocalInventory(prev => ({ ...prev, [item]: { ...prev[item], [field]: value } })); };
-    const handleDelete = (item) => { if(window.confirm(`Delete "${item}" from inventory permanently?`)) { const updated = { ...localInventory }; delete updated[item]; setLocalInventory(updated); } };
-    const handleAddItem = (e) => { e.preventDefault(); if (!newItemName) return; const name = newItemName.trim(); if (localInventory[name]) { alert("Item already exists."); return; } setLocalInventory(prev => ({ ...prev, [name]: { count: parseInt(newItemCount) || 0, category: newItemCategory, requiresTraining: newItemTraining } })); setNewItemName(''); setNewItemCount(1); setNewItemTraining(false); };
-    const startEditing = (key, data) => { setEditingKey(key); setEditName(key); setEditTraining(data.requiresTraining || false); };
-    const cancelEditing = () => { setEditingKey(null); setEditName(''); setEditTraining(false); };
-    const saveEdit = () => { if (!editName.trim()) return; const newKey = editName.trim(); const itemData = localInventory[editingKey]; const newData = { ...itemData, requiresTraining: editTraining }; const updatedInventory = { ...localInventory }; if (newKey !== editingKey) { if (updatedInventory[newKey]) { alert("An item with this name already exists."); return; } delete updatedInventory[editingKey]; updatedInventory[newKey] = newData; } else { updatedInventory[newKey] = newData; } setLocalInventory(updatedInventory); setEditingKey(null); };
-    const handleSave = async () => { setSaving(true); try { await setDoc(doc(db, "settings", "inventory_v2"), localInventory); setInventory(localInventory); alert("Inventory matrix updated."); } catch (error) { console.error("Error:", error); alert("Save failed."); } setSaving(false); };
+    const handleChange = (item, field, value) => {
+        setLocalInventory(prev => ({
+            ...prev,
+            [item]: { ...prev[item], [field]: value }
+        }));
+    };
+
+    const handleDelete = (item) => {
+        if(window.confirm(`Delete "${item}" from inventory permanently?`)) {
+            const updated = { ...localInventory };
+            delete updated[item];
+            setLocalInventory(updated);
+        }
+    };
+
+    const handleAddItem = (e) => {
+        e.preventDefault();
+        if (!newItemName) return;
+        const name = newItemTraining ? `${newItemName} *` : newItemName;
+        if (localInventory[name]) { alert("Item already exists."); return; }
+        setLocalInventory(prev => ({
+            ...prev,
+            [name]: {
+                count: parseInt(newItemCount) || 0,
+                category: newItemCategory,
+                requiresTraining: newItemTraining
+            }
+        }));
+        setNewItemName('');
+        setNewItemCount(1);
+        setNewItemTraining(false);
+    };
+
+    // START EDIT
+    const startEditing = (key, data) => {
+        setEditingKey(key);
+        setEditName(key.replace(' *', '').replace('*', '')); 
+        setEditTraining(data.requiresTraining || false);
+    };
+
+    // CANCEL EDIT
+    const cancelEditing = () => {
+        setEditingKey(null);
+        setEditName('');
+        setEditTraining(false);
+    };
+
+    // SAVE EDIT (RENAME)
+    const saveEdit = () => {
+        if (!editName.trim()) return;
+        const baseName = editName.trim();
+        const newKey = editTraining ? `${baseName} *` : baseName;
+        const itemData = localInventory[editingKey];
+        const newData = { ...itemData, requiresTraining: editTraining };
+        const updatedInventory = { ...localInventory };
+        
+        if (newKey !== editingKey) {
+            if (updatedInventory[newKey]) { alert("An item with this name already exists."); return; }
+            delete updatedInventory[editingKey];
+            updatedInventory[newKey] = newData;
+        } else {
+            updatedInventory[newKey] = newData;
+        }
+
+        setLocalInventory(updatedInventory);
+        setEditingKey(null);
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try { await setDoc(doc(db, "settings", "inventory_v2"), localInventory); setInventory(localInventory); alert("Inventory matrix updated."); } 
+        catch (error) { console.error("Error:", error); alert("Save failed."); }
+        setSaving(false);
+    };
 
     const groupedItems = { film: [], photo: [], culinary: [], general: [] };
-    Object.entries(localInventory).forEach(([name, data]) => { if (groupedItems[data.category]) groupedItems[data.category].push({ name, ...data }); else groupedItems['general'].push({ name, ...data }); });
+    Object.entries(localInventory).forEach(([name, data]) => {
+        if (groupedItems[data.category]) groupedItems[data.category].push({ name, ...data });
+        else groupedItems['general'].push({ name, ...data });
+    });
 
     return (
         <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-            <div className="bg-slate-950/50 border-b border-slate-800 p-6 flex justify-between items-center"><div><h2 className="text-xl font-bold text-white flex items-center gap-2"><Settings className="text-amber-400" /> Inventory Matrix</h2></div><button onClick={handleSave} disabled={saving} className="bg-amber-600 hover:bg-amber-500 text-slate-900 px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 shadow-[0_0_15px_rgba(245,158,11,0.3)]">{saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} {saving ? 'Processing...' : 'Save Changes'}</button></div>
-            <div className="p-6 bg-slate-900/30 border-b border-slate-800"><h3 className="text-sm font-mono text-cyan-500 uppercase mb-3">Add New Asset</h3><form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end"><div className="flex-1 w-full"><label className="block text-xs text-slate-500 mb-1">Item Name</label><input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" required /></div><div className="w-24"><label className="block text-xs text-slate-500 mb-1">Count</label><input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" /></div><div className="w-32"><label className="block text-xs text-slate-500 mb-1">Category</label><select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"><option value="film">Film</option><option value="photo">Photo</option><option value="culinary">Culinary</option><option value="general">General</option></select></div><div className="flex items-center gap-2 pb-2"><input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500" /><label className="text-sm text-slate-400">Training Req.</label></div><button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-medium flex items-center gap-1"><Plus size={16}/> Add</button></form></div>
-            <div className="p-6 space-y-8">{Object.entries(groupedItems).map(([cat, items]) => (<div key={cat}><h3 className="text-lg font-bold text-white capitalize mb-4 border-b border-slate-800 pb-2 text-emerald-400">{cat} Inventory</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{items.map((item) => (<div key={item.name} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700 flex justify-between items-center hover:border-slate-600 transition-colors">{editingKey === item.name ? (<div className="flex-1 flex items-center gap-2 mr-2"><input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 bg-slate-950 border border-cyan-500 rounded p-1 text-white text-sm outline-none" autoFocus /><label className="flex items-center gap-1 text-xs text-slate-400"><input type="checkbox" checked={editTraining} onChange={e => setEditTraining(e.target.checked)} /> Train</label><button onClick={saveEdit} className="text-green-500 hover:text-green-400 p-1"><Check size={18}/></button><button onClick={cancelEditing} className="text-red-500 hover:text-red-400 p-1"><X size={18}/></button></div>) : (<div className="flex-1 mr-4 flex items-center justify-between"><div><span className="font-mono text-slate-300 text-sm block truncate">{item.name.replace(' *','').replace('*','')}</span>{item.requiresTraining && <span className="text-[10px] text-red-400 uppercase bg-red-900/20 px-1 rounded">Training Req.</span>}</div><button onClick={() => startEditing(item.name, item)} className="text-slate-600 hover:text-cyan-400 p-1 ml-2"><Edit2 size={14}/></button></div>)}<div className="flex items-center gap-2 border-l border-slate-700 pl-3"><span className="text-xs text-slate-500 uppercase">Qty</span><input type="number" min="0" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value))} className="w-14 p-1 bg-slate-950 border border-slate-700 rounded text-center font-bold text-cyan-400 focus:border-cyan-500 outline-none text-sm"/><button onClick={() => handleDelete(item.name)} className="text-slate-600 hover:text-red-500 transition-colors ml-1"><Trash2 size={16}/></button></div></div>))}</div></div>))}</div>
-        </div>
-    );
-  }
-
-  function FeedbackView({ currentUser, adminMode, setSubmitted, onCancel }) {
-    // ... same
-    const [type, setType] = useState('bug');
-    const [message, setMessage] = useState('');
-    const [adminFeedbackList, setAdminFeedbackList] = useState([]);
-    useEffect(() => { if (adminMode) { const q = query(collection(db, "feedback"), orderBy("createdAt", "desc")); const unsubscribe = onSnapshot(q, (snapshot) => { const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); setAdminFeedbackList(items); }); return () => unsubscribe(); } }, [adminMode]);
-    const handleSubmit = async (e) => { e.preventDefault(); if(!message.trim()) return; try { const docData = { type, message, email: currentUser?.email || 'Anonymous', fullName: currentUser?.displayName || 'Guest', createdAt: new Date(), status: 'Open' }; await addDoc(collection(db, "feedback"), docData); if (type === 'bug') { sendNotificationEmail({ to_name: "Admin", to_email: "erivers@salpointe.org", subject: `[BUG REPORT] CTE Hub Issue`, title: "Bug Report", status: "Urgent", message: `User ${docData.fullName} reported a bug:\n\n${message}` }); } alert("Feedback received."); setMessage(''); if(!adminMode) onCancel(); } catch (err) { console.error(err); alert("Error sending feedback."); } };
-    const handleResolve = async (id) => { if(window.confirm("Mark Resolved?")) await updateDoc(doc(db, "feedback", id), { status: 'Resolved' }); };
-    const handleDelete = async (id) => { if(window.confirm("Delete feedback?")) await deleteDoc(doc(db, "feedback", id)); };
-    return (
-        <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
-            <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl">
-                <div className="flex items-center gap-4 mb-6"><div className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/30 text-cyan-400"><MessageSquare size={28} /></div><div><h2 className="text-2xl font-bold text-white">System Feedback</h2><p className="text-slate-400 text-sm">Report glitches or suggest system upgrades.</p></div></div>
-                <form onSubmit={handleSubmit} className="space-y-6"><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><button type="button" onClick={() => setType('bug')} className={`p-4 rounded-xl border text-left transition-all ${type === 'bug' ? 'bg-red-950/40 border-red-500 text-red-400' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}><div className="flex items-center gap-2 font-bold mb-1"><Bug size={18} /> Bug Report</div><p className="text-xs opacity-80">Something is broken.</p></button><button type="button" onClick={() => setType('feature')} className={`p-4 rounded-xl border text-left transition-all ${type === 'feature' ? 'bg-amber-950/40 border-amber-500 text-amber-400' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}`}><div className="flex items-center gap-2 font-bold mb-1"><Lightbulb size={18} /> Feature Idea</div><p className="text-xs opacity-80">"It would be cool if..."</p></button></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-2 ml-1">Details</label><textarea value={message} onChange={e => setMessage(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-slate-200 focus:border-cyan-500 outline-none h-32" placeholder="Describe..." required /></div><div className="flex justify-end gap-3"><button type="button" onClick={onCancel} className="px-6 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors">Cancel</button><button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-2 rounded-lg font-bold shadow-lg transition-all">Submit Feedback</button></div></form>
+            <div className="bg-slate-950/50 border-b border-slate-800 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Settings className="text-amber-400" /> Inventory Matrix
+                    </h2>
+                </div>
+                <button onClick={handleSave} disabled={saving} className="bg-amber-600 hover:bg-amber-500 text-slate-900 px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                    {saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} 
+                    {saving ? 'Processing...' : 'Save Changes'}
+                </button>
             </div>
-            {adminMode && (<div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl"><h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><ClipboardList size={18} className="text-purple-400"/> Admin Feedback Inbox</h3><div className="space-y-3">{adminFeedbackList.length === 0 ? <p className="text-slate-500 text-center py-4">No reports.</p> : adminFeedbackList.map(item => (<div key={item.id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex flex-col sm:flex-row gap-4 justify-between items-start hover:border-slate-700 transition-colors"><div className="flex-1"><div className="flex items-center gap-2 mb-1">{item.type === 'bug' ? <span className="text-xs font-bold bg-red-900/30 text-red-400 px-2 py-1 rounded flex items-center gap-1"><Bug size={12}/> BUG</span> : <span className="text-xs font-bold bg-amber-900/30 text-amber-400 px-2 py-1 rounded flex items-center gap-1"><Lightbulb size={12}/> IDEA</span>}{item.status === 'Resolved' && <span className="text-xs font-bold bg-green-900/30 text-green-400 px-2 py-1 rounded">RESOLVED</span>}<span className="text-xs text-slate-500 ml-2">{item.fullName}</span></div><p className="text-slate-300 text-sm leading-relaxed mt-2">{item.message}</p></div><div className="flex gap-2">{item.status !== 'Resolved' && (<button onClick={() => handleResolve(item.id)} className="p-2 bg-green-900/20 text-green-500 rounded-lg hover:bg-green-900/40" title="Mark Resolved"><CheckSquare size={16}/></button>)}<button onClick={() => handleDelete(item.id)} className="p-2 bg-slate-800 text-slate-500 rounded-lg hover:bg-red-900/20 hover:text-red-500" title="Delete"><Trash2 size={16}/></button></div></div>))}</div></div>)}
+            
+            {/* ADD NEW ITEM PANEL */}
+            <div className="p-6 bg-slate-900/30 border-b border-slate-800">
+                <h3 className="text-sm font-mono text-cyan-500 uppercase mb-3">Add New Asset</h3>
+                <form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex-1 w-full">
+                        <label className="block text-xs text-slate-500 mb-1">Item Name</label>
+                        <input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" required />
+                    </div>
+                    <div className="w-24">
+                         <label className="block text-xs text-slate-500 mb-1">Count</label>
+                         <input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" />
+                    </div>
+                    <div className="w-32">
+                         <label className="block text-xs text-slate-500 mb-1">Category</label>
+                         <select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none">
+                             <option value="film">Film</option>
+                             <option value="photo">Photo</option>
+                             <option value="culinary">Culinary</option>
+                             <option value="general">General</option>
+                         </select>
+                    </div>
+                    <div className="flex items-center gap-2 pb-2">
+                        <input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500" />
+                        <label className="text-sm text-slate-400">Training Req.</label>
+                    </div>
+                    <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-medium flex items-center gap-1"><Plus size={16}/> Add</button>
+                </form>
+            </div>
+
+            <div className="p-6 space-y-8">
+                {Object.entries(groupedItems).map(([cat, items]) => (
+                    <div key={cat}>
+                        <h3 className="text-lg font-bold text-white capitalize mb-4 border-b border-slate-800 pb-2 text-emerald-400">{cat} Inventory</h3>
+                        {/* UPDATED RESPONSIVE GRID LAYOUT */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {items.map((item) => (
+                                <div key={item.name} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 hover:border-slate-600 transition-colors">
+                                    {editingKey === item.name ? (
+                                        // EDIT MODE
+                                        <div className="w-full sm:flex-1 flex items-center gap-2 mr-2">
+                                            <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 bg-slate-950 border border-cyan-500 rounded p-1 text-white text-sm outline-none" autoFocus />
+                                            <label className="flex items-center gap-1 text-xs text-slate-400"><input type="checkbox" checked={editTraining} onChange={e => setEditTraining(e.target.checked)} /> Train</label>
+                                            <button onClick={saveEdit} className="text-green-500 hover:text-green-400 p-1"><Check size={18}/></button>
+                                            <button onClick={cancelEditing} className="text-red-500 hover:text-red-400 p-1"><X size={18}/></button>
+                                        </div>
+                                    ) : (
+                                        // VIEW MODE
+                                        <div className="w-full sm:flex-1 sm:mr-4 flex items-center justify-between">
+                                            <div className="min-w-0">
+                                                <span className="font-mono text-slate-300 text-sm block truncate">{item.name.replace(' *','').replace('*','')}</span>
+                                                {item.requiresTraining && <span className="text-[10px] text-red-400 uppercase bg-red-900/20 px-1 rounded">Training Req.</span>}
+                                            </div>
+                                            <button onClick={() => startEditing(item.name, item)} className="text-slate-600 hover:text-cyan-400 p-1 ml-2 shrink-0"><Edit2 size={14}/></button>
+                                        </div>
+                                    )}
+                                    
+                                    <div className="flex items-center justify-between sm:justify-start gap-2 border-t sm:border-t-0 sm:border-l border-slate-700 pt-3 sm:pt-0 sm:pl-3 w-full sm:w-auto">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-slate-500 uppercase">Qty</span>
+                                            <input type="number" min="0" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value))} className="w-14 p-1 bg-slate-950 border border-slate-700 rounded text-center font-bold text-cyan-400 focus:border-cyan-500 outline-none text-sm"/>
+                                        </div>
+                                        <button onClick={() => handleDelete(item.name)} className="text-slate-600 hover:text-red-500 transition-colors ml-1"><Trash2 size={16}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
     );
   }
@@ -680,103 +624,6 @@ const App = () => {
               <div className="bg-amber-950/30 rounded-xl p-5 border border-amber-500/20"><h4 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-2">Pending</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-amber-400 font-mono">{stats.pending}</span></div></div>
               <div className="md:col-span-2 bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><PieChart size={16} className="text-purple-400" /> Requests by Department</h3><div className="space-y-4">{Object.entries(stats.deptCounts).sort(([,a], [,b]) => b - a).map(([dept, count]) => { const percentage = (count / stats.total) * 100; return (<div key={dept}><div className="flex justify-between text-xs mb-2 font-mono"><span className="text-slate-400">{dept}</span><span className="text-cyan-400">{count}</span></div><div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${percentage}%` }}></div></div></div>); })}</div></div>
               <div className="bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><Camera size={16} className="text-pink-400" /> Top Gear</h3><ul className="space-y-3">{stats.topEquipment.map(([item, count], index) => (<li key={item} className="flex items-center gap-3"><div className="w-6 h-6 rounded bg-slate-800 text-cyan-400 flex items-center justify-center text-xs font-mono border border-slate-700">{index + 1}</div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-300 truncate">{item.replace(' *', '')}</p><p className="text-xs text-slate-500 font-mono">{count} uses</p></div></li>))}</ul></div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  function MyRequestsView({ currentUser }) {
-    // ... same
-    const [myRequests, setMyRequests] = useState([]);
-    const [loading, setLoading] = useState(true);
-    useEffect(() => {
-        if (!currentUser) return;
-        const q = query(collection(db, "requests"), where("email", "==", currentUser.email), orderBy("createdAt", "desc"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A' }));
-            setMyRequests(reqs);
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, [currentUser]);
-    const handleCancel = async (id) => { if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "requests", id)); };
-    const getStatusBadge = (status) => {
-        const styles = { 'Approved': 'bg-green-950/50 text-green-400 border-green-500/30', 'Denied': 'bg-red-950/50 text-red-400 border-red-500/30', 'Completed': 'bg-slate-800 text-slate-400 border-slate-700', 'default': 'bg-amber-950/50 text-amber-400 border-amber-500/30' };
-        return <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${styles[status] || styles['default']}`}>{status}</span>;
-    };
-    return (
-        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-            <div className="bg-slate-950/50 border-b border-slate-800 p-6"><h2 className="text-xl font-bold text-white flex items-center gap-2"><History className="text-cyan-400" /> My Request History</h2></div>
-            <div className="overflow-x-auto">
-                {loading ? <div className="p-8 text-center text-slate-500 font-mono">LOADING DATA...</div> : myRequests.length === 0 ? <div className="p-12 text-center text-slate-500">No records found.</div> : (
-                    <table className="w-full text-left border-collapse min-w-[700px]">
-                        <thead><tr className="bg-slate-800/50 border-b border-slate-700 text-xs uppercase text-slate-400 font-mono"><th className="p-4">Ref ID</th><th className="p-4">Dept</th><th className="p-4">Project</th><th className="p-4">Date Submitted</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
-                        <tbody className="divide-y divide-slate-800">{myRequests.map((req) => (
-                            <tr key={req.id} className="hover:bg-slate-800/50 transition-colors"><td className="p-4 text-cyan-400 font-mono text-xs">{req.displayId}</td><td className="p-4 text-slate-300 text-sm capitalize">{req.dept}</td><td className="p-4 font-semibold text-white text-sm">{req.title}</td><td className="p-4 text-slate-400 text-sm font-mono">{req.formattedDate}</td><td className="p-4">{getStatusBadge(req.status)}</td><td className="p-4">{req.status === 'Pending Review' && <button onClick={() => handleCancel(req.id)} className="text-xs text-red-400 border border-red-900 hover:bg-red-950/50 px-3 py-1 rounded transition-colors">Cancel</button>}</td></tr>
-                        ))}</tbody>
-                    </table>
-                )}
-            </div>
-        </div>
-    );
-  }
-
-  function CalendarView({ adminMode, blackouts }) {
-    // ... same
-    const [displayDate, setDisplayDate] = useState(new Date()); 
-    const [selectedDate, setSelectedDate] = useState(null);
-    const [filter, setFilter] = useState('all');
-    const [events, setEvents] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const nextMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() + 1)));
-    const prevMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() - 1)));
-    useEffect(() => { const q = query(collection(db, "requests")); const unsubscribe = onSnapshot(q, (snapshot) => { const fetchedEvents = snapshot.docs.map(doc => { const data = doc.data(); let dateStr = data.eventDate || data.checkoutDate || data.pickupDate || data.deadline; if (!dateStr) return null; const [y, m, d] = dateStr.split('-').map(Number); const dateObj = new Date(y, m - 1, d); return { id: doc.id, title: data.title || data.requestName || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data }; }).filter(e => e !== null && e.status === 'Approved'); setEvents(fetchedEvents); setLoading(false); }); return () => unsubscribe(); }, []);
-    const handleDateClick = async (day) => { const clickedDate = new Date(displayDate.getFullYear(), displayDate.getMonth(), day); const dateStr = clickedDate.toISOString().split('T')[0]; if (adminMode) { if (blackouts.includes(dateStr)) { if(window.confirm(`Re-open ${dateStr}?`)) await deleteDoc(doc(db, "blackout_dates", dateStr)); } else { if(window.confirm(`Blackout ${dateStr}?`)) await setDoc(doc(db, "blackout_dates", dateStr), { reason: "Closed" }); } return; } setSelectedDate(selectedDate === day ? null : day); };
-    const getDaysInMonth = (date) => { const year = date.getFullYear(); const month = date.getMonth(); const days = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); return { days, firstDay, monthName: date.toLocaleString('default', { month: 'long' }), year }; };
-    const { days, firstDay, monthName, year } = getDaysInMonth(displayDate);
-    const daysArray = Array.from({ length: days }, (_, i) => i + 1);
-    const empties = Array.from({ length: firstDay }, (_, i) => i);
-    const getEventsForDay = (dayNum) => events.filter(e => e.date.getDate() === dayNum && e.date.getMonth() === displayDate.getMonth() && e.date.getFullYear() === displayDate.getFullYear() && (filter === 'all' || e.dept === filter));
-    const getGoogleCalendarUrl = (event) => { const baseUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE"; const text = `&text=${encodeURIComponent(`[${event.dept}] ${event.title}`)}`; const details = `&details=${encodeURIComponent(`Ref: ${event.displayId}\nRequested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`; const location = `&location=${encodeURIComponent(event.location || 'Salpointe Catholic High School')}`; const y = event.date.getFullYear(); const m = String(event.date.getMonth() + 1).padStart(2, '0'); const d = String(event.date.getDate()).padStart(2, '0'); const dateString = `${y}${m}${d}`; const nextDay = new Date(event.date); nextDay.setDate(nextDay.getDate() + 1); const ny = nextDay.getFullYear(); const nm = String(nextDay.getMonth() + 1).padStart(2, '0'); const nd = String(nextDay.getDate()).padStart(2, '0'); const nextDateString = `${ny}${nm}${nd}`; const dates = `&dates=${dateString}/${nextDateString}`; return `${baseUrl}${text}${dates}${details}${location}`; };
-
-    return (
-      <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-        <div className="bg-slate-950/50 p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div><div className="flex items-center gap-4 mb-1"><button onClick={prevMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronLeft size={24}/></button><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-white">{monthName} <span className="text-slate-500">{year}</span></h2><button onClick={nextMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronRight size={24}/></button></div></div>
-          <div className="flex bg-slate-800/50 rounded-lg p-1 w-full md:w-auto overflow-x-auto">
-            {['all', Departments.FILM, Departments.PHOTO, Departments.CULINARY].map(f => (<button key={f} onClick={() => setFilter(f)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap capitalize ${filter === f ? 'bg-cyan-600 text-white shadow-[0_0_10px_rgba(8,145,178,0.4)]' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>{f === 'all' ? 'All' : f}</button>))}
-          </div>
-        </div>
-        <div className="p-6">
-           {adminMode && <div className="mb-4 p-3 bg-slate-800/50 border border-slate-700 rounded text-xs text-slate-400 flex items-center gap-2 font-mono"><Ban size={14} className="text-red-400"/> Admin Mode: Click a date to toggle blackout.</div>}
-           <div className="overflow-x-auto pb-2">
-            {loading ? <div className="text-center py-8 text-slate-500 font-mono">LOADING MATRIX...</div> : (
-              <div className="min-w-[600px] md:min-w-0 grid grid-cols-7 gap-px bg-slate-800 border border-slate-800 rounded-xl overflow-hidden shadow-inner">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="bg-slate-900 p-2 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">{day}</div>)}
-                {empties.map(i => <div key={`empty-${i}`} className="bg-slate-950/50 min-h-[80px] md:min-h-[100px]" />)}
-                {daysArray.map(day => {
-                  const dayEvents = getEventsForDay(day);
-                  const isToday = day === new Date().getDate() && displayDate.getMonth() === new Date().getMonth() && displayDate.getFullYear() === new Date().getFullYear();
-                  const currentDateStr = new Date(year, displayDate.getMonth(), day).toISOString().split('T')[0];
-                  const isBlackout = blackouts.includes(currentDateStr);
-                  return (
-                    <div key={day} className={`min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-800 relative group cursor-pointer transition-colors ${isBlackout ? 'bg-slate-900/30' : 'bg-slate-950/50'} ${selectedDate === day ? 'bg-cyan-900/20 border-cyan-500/30' : 'hover:bg-slate-900'}`} onClick={() => handleDateClick(day)}>
-                      <span className={`text-xs md:text-sm font-medium inline-block w-6 h-6 md:w-7 md:h-7 leading-6 md:leading-7 text-center rounded-full mb-1 ${isToday ? 'bg-red-600 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]' : 'text-slate-400'}`}>{day}</span>
-                      {isBlackout ? (<div className="flex justify-center mt-2"><Ban className="text-red-900/50" size={20} /></div>) : (<div className="space-y-1">{dayEvents.map(e => <div key={e.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${e.type === 'checkout' ? 'bg-cyan-950/50 text-cyan-400 border-cyan-800/50' : 'bg-emerald-950/50 text-emerald-400 border-emerald-800/50'}`}>{e.title}</div>)}</div>)}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          {selectedDate && !blackouts.includes(new Date(year, displayDate.getMonth(), selectedDate).toISOString().split('T')[0]) && (
-            <div className="mt-6 p-4 bg-slate-900/50 rounded-xl border border-slate-800 animate-fade-in">
-              <h4 className="font-bold text-white mb-3 flex items-center gap-2"><Calendar size={16} className="text-cyan-400"/> {monthName} {selectedDate}</h4>
-              {getEventsForDay(selectedDate).length === 0 ? <p className="text-slate-500 text-sm">Sector clear. No events.</p> : (
-                <div className="space-y-3">{getEventsForDay(selectedDate).map(e => (<div key={e.id} className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-sm"><div><p className="font-bold text-slate-200 text-sm">{e.title}</p><p className="text-xs text-slate-400 uppercase">{e.dept} • {e.fullName}</p></div><a href={getGoogleCalendarUrl(e)} target="_blank" rel="noopener noreferrer" className="bg-slate-700 hover:bg-slate-600 p-2 rounded text-white transition-colors"><CalendarPlus size={16}/></a></div>))}</div>
-              )}
             </div>
           )}
         </div>
