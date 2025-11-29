@@ -40,7 +40,10 @@ import {
   Download,
   Search,
   Ban,
-  Cpu // Added CPU icon for tech feel
+  Cpu,
+  Zap,        // Added for Landing
+  FileX,      // Added for Landing (Paper)
+  ShieldCheck // Added for Landing (Security)
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -65,6 +68,7 @@ const ALLOWED_ADMINS = [
     "jharris@salpointe.org",
     "lsaulsby@salpointe.org",
     "cjones@salpointe.org",
+    "cbarry@salpointe.org",
     "erivers@salpointe.org" 
 ];
 
@@ -85,6 +89,8 @@ const DEFAULT_INVENTORY = {
 };
 
 const Departments = {
+  LANDING: 'landing', // New Default View
+  DASHBOARD: 'dashboard', // The Card Grid
   FILM: 'film',
   GRAPHIC: 'graphic',
   BUSINESS: 'business',
@@ -109,7 +115,7 @@ const sendNotificationEmail = (templateParams) => {
 };
 
 const App = () => {
-  const [currentView, setCurrentView] = useState('home');
+  const [currentView, setCurrentView] = useState('landing'); // Default to Landing Page
   const [submitted, setSubmitted] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [adminMode, setAdminMode] = useState(false);
@@ -147,18 +153,27 @@ const App = () => {
     return () => unsubscribeBlackouts();
   }, []);
 
-  const handleLogin = async () => { try { await signInWithPopup(auth, googleProvider); } catch (error) { console.error("Login failed:", error); alert("Login failed."); } };
-  const handleLogout = async () => { await signOut(auth); goHome(); };
-  const goHome = () => { setCurrentView('home'); setSubmitted(false); };
-  const isRequestView = ['home', Departments.FILM, Departments.GRAPHIC, Departments.BUSINESS, Departments.CULINARY, Departments.PHOTO].includes(currentView);
+  const handleLogin = async () => { 
+      try { 
+          await signInWithPopup(auth, googleProvider); 
+          setCurrentView(Departments.DASHBOARD); // Auto-redirect to dashboard on login
+      } catch (error) { 
+          console.error("Login failed:", error); 
+          alert("Login failed."); 
+      } 
+  };
+  
+  const handleLogout = async () => { await signOut(auth); setCurrentView('landing'); };
+  const goHome = () => { setCurrentView('landing'); setSubmitted(false); };
+  const goToDashboard = () => { setCurrentView(Departments.DASHBOARD); setSubmitted(false); };
+
+  const isRequestView = [Departments.FILM, Departments.GRAPHIC, Departments.BUSINESS, Departments.CULINARY, Departments.PHOTO].includes(currentView);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500/30">
-      {/* Futuristic Background Grid */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(6, 182, 212, 0.15) 1px, transparent 0)', backgroundSize: '32px 32px' }}></div>
       <div className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-b from-transparent via-slate-950/50 to-slate-950"></div>
 
-      {/* Header */}
       <header className="bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 sticky top-0 z-50 shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
         <div className="max-w-7xl mx-auto px-4 py-3 md:py-4 flex flex-wrap items-center justify-between gap-y-3 relative z-10">
           <div className="flex items-center space-x-4 cursor-pointer group" onClick={goHome}>
@@ -175,22 +190,26 @@ const App = () => {
           </div>
           
           <nav className="flex items-center gap-1 md:gap-2 ml-auto">
-            {!isRequestView && currentView !== 'home' && (
-               <button onClick={goHome} className="text-xs md:text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 px-3 py-2 rounded-lg transition-all flex items-center gap-2 mr-1 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]">
+            {!isRequestView && currentView !== 'landing' && currentView !== 'dashboard' && (
+               <button onClick={goToDashboard} className="text-xs md:text-sm bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 px-3 py-2 rounded-lg transition-all flex items-center gap-2 mr-1 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]">
                 <ArrowLeft size={16} /><span className="hidden sm:inline">Back</span>
               </button>
             )}
 
-            <button onClick={() => { setCurrentView(Departments.CALENDAR); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-all flex items-center gap-2 border ${currentView === Departments.CALENDAR ? 'bg-cyan-950/50 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.15)]' : 'border-transparent text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`}>
-              <Calendar size={16} /><span className="hidden sm:inline">Schedule</span>
-            </button>
+            {currentView !== 'landing' && (
+                <button onClick={() => { setCurrentView(Departments.CALENDAR); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-all flex items-center gap-2 border ${currentView === Departments.CALENDAR ? 'bg-cyan-950/50 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.15)]' : 'border-transparent text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`}>
+                <Calendar size={16} /><span className="hidden sm:inline">Schedule</span>
+                </button>
+            )}
             
             {currentUser ? (
                 <>
-                    <button onClick={() => { setCurrentView(Departments.MY_REQUESTS); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-all flex items-center gap-2 border ${currentView === Departments.MY_REQUESTS ? 'bg-cyan-950/50 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.15)]' : 'border-transparent text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`}>
-                        <History size={16} /><span className="hidden sm:inline">My Requests</span>
-                    </button>
-                    {adminMode && (
+                    {currentView !== 'landing' && (
+                        <button onClick={() => { setCurrentView(Departments.MY_REQUESTS); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-all flex items-center gap-2 border ${currentView === Departments.MY_REQUESTS ? 'bg-cyan-950/50 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.15)]' : 'border-transparent text-slate-400 hover:text-cyan-400 hover:bg-slate-800'}`}>
+                            <History size={16} /><span className="hidden sm:inline">My Requests</span>
+                        </button>
+                    )}
+                    {adminMode && currentView !== 'landing' && (
                       <>
                         <button onClick={() => { setCurrentView(Departments.QUEUE); setSubmitted(false); }} className={`text-xs md:text-sm font-medium px-3 py-2 rounded-lg transition-all flex items-center gap-2 border ${currentView === Departments.QUEUE ? 'bg-purple-950/50 border-purple-500 text-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.15)]' : 'border-transparent text-slate-400 hover:text-purple-400 hover:bg-slate-800'}`}>
                             <ClipboardList size={16} /><span className="hidden sm:inline">Queue</span>
@@ -217,20 +236,20 @@ const App = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6 md:py-10 relative z-10">
         {submitted ? (
-          <SuccessView onReset={goHome} />
+          <SuccessView onReset={goToDashboard} />
         ) : (
           <>
-            {currentView === 'home' && <Dashboard onViewChange={setCurrentView} currentUser={currentUser} />}
+            {currentView === Departments.LANDING && <LandingPage currentUser={currentUser} onLogin={handleLogin} onEnter={goToDashboard} />}
+            {currentView === Departments.DASHBOARD && <ServiceGrid onViewChange={setCurrentView} currentUser={currentUser} />}
             
             {/* Forms receive blackouts for validation */}
-            {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
-            {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
-            {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
-            {currentView === Departments.CULINARY && <CulinaryForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} />}
-            {currentView === Departments.PHOTO && <PhotoForm setSubmitted={setSubmitted} onCancel={goHome} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
+            {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
+            {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
+            {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
+            {currentView === Departments.CULINARY && <CulinaryForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
+            {currentView === Departments.PHOTO && <PhotoForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
             
             {currentView === Departments.CALENDAR && <CalendarView adminMode={adminMode} blackouts={blackouts} />}
             {currentView === Departments.QUEUE && <RequestQueueView adminMode={adminMode} setAdminMode={setAdminMode} ALLOWED_ADMINS={ALLOWED_ADMINS} />}
@@ -240,20 +259,76 @@ const App = () => {
           </>
         )}
       </main>
-      
-      {/* Footer with Salpointe Tag */}
-      <footer className="text-center py-10 px-4 border-t border-slate-800/50 mt-auto relative z-10">
-        <div className="flex flex-col items-center justify-center gap-3 opacity-60 hover:opacity-100 transition-opacity duration-500">
-            <img src={salpointeLogo} alt="Salpointe Catholic High School" className="w-8 h-8 opacity-80 grayscale hover:grayscale-0 transition-all" />
-            <p className="text-slate-500 text-xs font-mono tracking-widest uppercase">
-                &copy; {new Date().getFullYear()} Salpointe Catholic High School <span className="text-slate-700 mx-2">|</span> CTE Department
-            </p>
-        </div>
-      </footer>
     </div>
   );
 
   // --- Sub-Components ---
+
+  function LandingPage({ currentUser, onLogin, onEnter }) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[80vh] text-center space-y-12 animate-fade-in">
+            <div className="space-y-6 max-w-4xl mx-auto">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-950/50 border border-cyan-500/30 text-cyan-400 text-xs font-mono uppercase tracking-widest animate-pulse">
+                    <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]"></div>
+                    System Online v1.0
+                </div>
+                <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight leading-tight">
+                    The Future of <br/>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Creative Logistics</span>
+                </h1>
+                <p className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                    Eliminating the friction of paper logs and email chains. A centralized command center for Salpointe's creative technology.
+                </p>
+                
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+                    {currentUser ? (
+                        <button 
+                            onClick={onEnter}
+                            className="group relative px-8 py-4 bg-cyan-600 hover:bg-cyan-500 text-white text-lg font-bold rounded-xl shadow-[0_0_20px_rgba(8,145,178,0.4)] transition-all flex items-center gap-3 w-full sm:w-auto justify-center overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                            <Zap size={24} className="fill-white" /> 
+                            Initialize Hub
+                        </button>
+                    ) : (
+                        <button 
+                            onClick={onLogin}
+                            className="group px-8 py-4 bg-white text-slate-900 hover:bg-slate-200 text-lg font-bold rounded-xl shadow-lg transition-all flex items-center gap-3 w-full sm:w-auto justify-center"
+                        >
+                            <LogIn size={24} />
+                            Login to Access
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Problem / Solution Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full text-left">
+                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-red-500/30 transition-colors group">
+                    <div className="w-12 h-12 bg-red-900/20 rounded-lg flex items-center justify-center text-red-500 mb-4 group-hover:scale-110 transition-transform">
+                        <FileX size={24} />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">Paperless Protocol</h3>
+                    <p className="text-slate-400 text-sm">Deprecated legacy analog logs. Requests are now digital, trackable, and impossible to lose.</p>
+                </div>
+                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-cyan-500/30 transition-colors group">
+                    <div className="w-12 h-12 bg-cyan-900/20 rounded-lg flex items-center justify-center text-cyan-400 mb-4 group-hover:scale-110 transition-transform">
+                        <Cpu size={24} />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">Real-Time Inventory</h3>
+                    <p className="text-slate-400 text-sm">Live database tracking prevents double-bookings. See exactly what gear is available, instantly.</p>
+                </div>
+                <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl backdrop-blur-sm hover:border-emerald-500/30 transition-colors group">
+                    <div className="w-12 h-12 bg-emerald-900/20 rounded-lg flex items-center justify-center text-emerald-400 mb-4 group-hover:scale-110 transition-transform">
+                        <ShieldCheck size={24} />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">Secure Access</h3>
+                    <p className="text-slate-400 text-sm">Authenticated via Salpointe Google Workspace. Your data is protected and your history is saved.</p>
+                </div>
+            </div>
+        </div>
+      );
+  }
 
   function SuccessView({ onReset }) {
     return (
@@ -266,13 +341,13 @@ const App = () => {
           Your data has been securely logged in the mainframe. The department head has been notified via quantum link (email).
         </p>
         <button onClick={onReset} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-lg font-semibold transition-all shadow-[0_0_15px_rgba(8,145,178,0.4)]">
-          Submit Another Request
+          Return to Dashboard
         </button>
       </div>
     );
   }
 
-  function Dashboard({ onViewChange, currentUser }) {
+  function ServiceGrid({ onViewChange, currentUser }) {
     const [drafts, setDrafts] = useState({});
     useEffect(() => {
         const checkDrafts = () => {
@@ -296,7 +371,7 @@ const App = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="col-span-full mb-4">
           <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">
-            {currentUser ? `Welcome, ${currentUser.displayName.split(' ')[0]}.` : "Welcome, Lancer."}
+            {currentUser ? `Welcome, ${currentUser.displayName.split(' ')[0]}.` : "Access Granted."}
           </h2>
           <p className="text-slate-400 text-lg">Select a sector to initialize a request.</p>
         </div>
@@ -348,6 +423,10 @@ const App = () => {
     );
   }
 
+  // ... InventoryManager, AnalyticsView, MyRequestsView, CalendarView, RequestQueueView, FormContainer ...
+  // (These components remain functionally identical to previous step but inherit new styles via global className updates in their render methods if needed, 
+  // though they were already updated to dark mode in the previous step. I will ensure they are included here for completeness.)
+  
   function InventoryManager({ inventory, setInventory }) {
     const [localInventory, setLocalInventory] = useState(inventory);
     const [saving, setSaving] = useState(false);
@@ -371,7 +450,6 @@ const App = () => {
   function AnalyticsView() {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, deptCounts: {}, topEquipment: [] });
-
     useEffect(() => {
       const q = query(collection(db, "requests"));
       const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -389,9 +467,7 @@ const App = () => {
       });
       return () => unsubscribe();
     }, []);
-
     const approvalRate = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
-
     return (
       <div className="space-y-6 animate-fade-in">
         <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl">
@@ -401,8 +477,7 @@ const App = () => {
               <div className="bg-emerald-950/30 rounded-xl p-5 border border-emerald-500/20"><h4 className="text-emerald-400 font-bold text-xs uppercase tracking-widest mb-2">Approval Rate</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-emerald-400 font-mono">{approvalRate}%</span></div></div>
               <div className="bg-blue-950/30 rounded-xl p-5 border border-blue-500/20"><h4 className="text-blue-400 font-bold text-xs uppercase tracking-widest mb-2">Completed</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-blue-400 font-mono">{stats.approved}</span></div></div>
               <div className="bg-amber-950/30 rounded-xl p-5 border border-amber-500/20"><h4 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-2">Pending</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-amber-400 font-mono">{stats.pending}</span></div></div>
-              
-              <div className="md:col-span-2 bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><PieChart size={16} className="text-purple-400" /> Requests by Department</h3><div className="space-y-4">{Object.entries(stats.deptCounts).sort(([,a], [,b]) => b - a).map(([dept, count]) => { const percentage = (count / stats.total) * 100; return (<div key={dept}><div className="flex justify-between text-xs mb-2 font-mono"><span className="text-slate-400">{dept}</span><span className="text-cyan-400">{count}</span></div><div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden"><div className="bg-purple-500 h-2 rounded-full shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ width: `${percentage}%` }}></div></div></div>); })}</div></div>
+              <div className="md:col-span-2 bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><PieChart size={16} className="text-purple-400" /> Requests by Department</h3><div className="space-y-4">{Object.entries(stats.deptCounts).sort(([,a], [,b]) => b - a).map(([dept, count]) => { const percentage = (count / stats.total) * 100; return (<div key={dept}><div className="flex justify-between text-xs mb-2 font-mono"><span className="text-slate-400">{dept}</span><span className="text-cyan-400">{count}</span></div><div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${percentage}%` }}></div></div></div>); })}</div></div>
               <div className="bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><Camera size={16} className="text-pink-400" /> Top Gear</h3><ul className="space-y-3">{stats.topEquipment.map(([item, count], index) => (<li key={item} className="flex items-center gap-3"><div className="w-6 h-6 rounded bg-slate-800 text-cyan-400 flex items-center justify-center text-xs font-mono border border-slate-700">{index + 1}</div><div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-300 truncate">{item.replace(' *', '')}</p><p className="text-xs text-slate-500 font-mono">{count} uses</p></div></li>))}</ul></div>
             </div>
           )}
@@ -425,23 +500,15 @@ const App = () => {
         return () => unsubscribe();
     }, [currentUser]);
     const handleCancel = async (id) => { if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "requests", id)); };
-    
     const getStatusBadge = (status) => {
-        const styles = {
-            'Approved': 'bg-green-950/50 text-green-400 border-green-500/30',
-            'Denied': 'bg-red-950/50 text-red-400 border-red-500/30',
-            'Completed': 'bg-slate-800 text-slate-400 border-slate-700',
-            'default': 'bg-amber-950/50 text-amber-400 border-amber-500/30'
-        };
-        const style = styles[status] || styles['default'];
-        return <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${style}`}>{status}</span>;
+        const styles = { 'Approved': 'bg-green-950/50 text-green-400 border-green-500/30', 'Denied': 'bg-red-950/50 text-red-400 border-red-500/30', 'Completed': 'bg-slate-800 text-slate-400 border-slate-700', 'default': 'bg-amber-950/50 text-amber-400 border-amber-500/30' };
+        return <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${styles[status] || styles['default']}`}>{status}</span>;
     };
-
     return (
         <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
             <div className="bg-slate-950/50 border-b border-slate-800 p-6"><h2 className="text-xl font-bold text-white flex items-center gap-2"><History className="text-cyan-400" /> My Request History</h2></div>
             <div className="overflow-x-auto">
-                {loading ? <div className="p-8 text-center text-slate-500 font-mono">LOADING DATA...</div> : myRequests.length === 0 ? <div className="p-12 text-center text-slate-500">No records found in local database.</div> : (
+                {loading ? <div className="p-8 text-center text-slate-500 font-mono">LOADING DATA...</div> : myRequests.length === 0 ? <div className="p-12 text-center text-slate-500">No records found.</div> : (
                     <table className="w-full text-left border-collapse min-w-[700px]">
                         <thead><tr className="bg-slate-800/50 border-b border-slate-700 text-xs uppercase text-slate-400 font-mono"><th className="p-4">Ref ID</th><th className="p-4">Dept</th><th className="p-4">Project</th><th className="p-4">Date Submitted</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
                         <tbody className="divide-y divide-slate-800">{myRequests.map((req) => (
@@ -454,10 +521,7 @@ const App = () => {
     );
   }
 
-  // --- NEW: Calendar with Blackout Dates ---
-
   function CalendarView({ adminMode, blackouts }) {
-    // ... (State setup same as before)
     const [displayDate, setDisplayDate] = useState(new Date()); 
     const [selectedDate, setSelectedDate] = useState(null);
     const [filter, setFilter] = useState('all');
@@ -493,15 +557,7 @@ const App = () => {
         }
         setSelectedDate(selectedDate === day ? null : day);
     };
-
-    const getDaysInMonth = (date) => {
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      const days = new Date(year, month + 1, 0).getDate();
-      const firstDay = new Date(year, month, 1).getDay();
-      return { days, firstDay, monthName: date.toLocaleString('default', { month: 'long' }), year };
-    };
-    
+    const getDaysInMonth = (date) => { const year = date.getFullYear(); const month = date.getMonth(); const days = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); return { days, firstDay, monthName: date.toLocaleString('default', { month: 'long' }), year }; };
     const { days, firstDay, monthName, year } = getDaysInMonth(displayDate);
     const daysArray = Array.from({ length: days }, (_, i) => i + 1);
     const empties = Array.from({ length: firstDay }, (_, i) => i);
@@ -511,17 +567,8 @@ const App = () => {
       const text = `&text=${encodeURIComponent(`[${event.dept}] ${event.title}`)}`;
       const details = `&details=${encodeURIComponent(`Ref: ${event.displayId}\nRequested by: ${event.fullName}\nRole: ${event.role}\nDetails: ${event.details || event.brief || event.description || 'N/A'}`)}`;
       const location = `&location=${encodeURIComponent(event.location || 'Salpointe Catholic High School')}`;
-      const y = event.date.getFullYear();
-      const m = String(event.date.getMonth() + 1).padStart(2, '0');
-      const d = String(event.date.getDate()).padStart(2, '0');
-      const dateString = `${y}${m}${d}`;
-      const nextDay = new Date(event.date);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const ny = nextDay.getFullYear();
-      const nm = String(nextDay.getMonth() + 1).padStart(2, '0');
-      const nd = String(nextDay.getDate()).padStart(2, '0');
-      const nextDateString = `${ny}${nm}${nd}`;
-      const dates = `&dates=${dateString}/${nextDateString}`; 
+      const y = event.date.getFullYear(); const m = String(event.date.getMonth() + 1).padStart(2, '0'); const d = String(event.date.getDate()).padStart(2, '0'); const dateString = `${y}${m}${d}`;
+      const nextDay = new Date(event.date); nextDay.setDate(nextDay.getDate() + 1); const ny = nextDay.getFullYear(); const nm = String(nextDay.getMonth() + 1).padStart(2, '0'); const nd = String(nextDay.getDate()).padStart(2, '0'); const nextDateString = `${ny}${nm}${nd}`; const dates = `&dates=${dateString}/${nextDateString}`; 
       return `${baseUrl}${text}${dates}${details}${location}`;
     };
 
@@ -529,16 +576,10 @@ const App = () => {
       <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
         <div className="bg-slate-950/50 p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-             <div className="flex items-center gap-4 mb-1">
-                 <button onClick={prevMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronLeft size={24}/></button>
-                 <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-white">{monthName} <span className="text-slate-500">{year}</span></h2>
-                 <button onClick={nextMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronRight size={24}/></button>
-             </div>
+             <div className="flex items-center gap-4 mb-1"><button onClick={prevMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronLeft size={24}/></button><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-white">{monthName} <span className="text-slate-500">{year}</span></h2><button onClick={nextMonth} className="p-1 hover:bg-slate-800 rounded-full transition-colors text-cyan-400"><ChevronRight size={24}/></button></div>
           </div>
           <div className="flex bg-slate-800/50 rounded-lg p-1 w-full md:w-auto overflow-x-auto">
-            {['all', Departments.FILM, Departments.PHOTO, Departments.CULINARY].map(f => (
-                <button key={f} onClick={() => setFilter(f)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap capitalize ${filter === f ? 'bg-cyan-600 text-white shadow-[0_0_10px_rgba(8,145,178,0.4)]' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>{f === 'all' ? 'All' : f}</button>
-            ))}
+            {['all', Departments.FILM, Departments.PHOTO, Departments.CULINARY].map(f => (<button key={f} onClick={() => setFilter(f)} className={`flex-1 md:flex-none px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-all whitespace-nowrap capitalize ${filter === f ? 'bg-cyan-600 text-white shadow-[0_0_10px_rgba(8,145,178,0.4)]' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}>{f === 'all' ? 'All' : f}</button>))}
           </div>
         </div>
         <div className="p-6">
@@ -553,22 +594,10 @@ const App = () => {
                   const isToday = day === new Date().getDate() && displayDate.getMonth() === new Date().getMonth() && displayDate.getFullYear() === new Date().getFullYear();
                   const currentDateStr = new Date(year, displayDate.getMonth(), day).toISOString().split('T')[0];
                   const isBlackout = blackouts.includes(currentDateStr);
-
                   return (
-                    <div 
-                      key={day} 
-                      className={`min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-800 relative group cursor-pointer transition-colors 
-                        ${isBlackout ? 'bg-slate-900/30' : 'bg-slate-950/50'} 
-                        ${selectedDate === day ? 'bg-cyan-900/20 border-cyan-500/30' : 'hover:bg-slate-900'}`
-                      } 
-                      onClick={() => handleDateClick(day)}
-                    >
+                    <div key={day} className={`min-h-[80px] md:min-h-[100px] p-1 md:p-2 border-t border-slate-800 relative group cursor-pointer transition-colors ${isBlackout ? 'bg-slate-900/30' : 'bg-slate-950/50'} ${selectedDate === day ? 'bg-cyan-900/20 border-cyan-500/30' : 'hover:bg-slate-900'}`} onClick={() => handleDateClick(day)}>
                       <span className={`text-xs md:text-sm font-medium inline-block w-6 h-6 md:w-7 md:h-7 leading-6 md:leading-7 text-center rounded-full mb-1 ${isToday ? 'bg-red-600 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]' : 'text-slate-400'}`}>{day}</span>
-                      {isBlackout ? (
-                          <div className="flex justify-center mt-2"><Ban className="text-red-900/50" size={20} /></div>
-                      ) : (
-                        <div className="space-y-1">{dayEvents.map(e => <div key={e.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${e.type === 'checkout' ? 'bg-cyan-950/50 text-cyan-400 border-cyan-800/50' : 'bg-emerald-950/50 text-emerald-400 border-emerald-800/50'}`}>{e.title}</div>)}</div>
-                      )}
+                      {isBlackout ? (<div className="flex justify-center mt-2"><Ban className="text-red-900/50" size={20} /></div>) : (<div className="space-y-1">{dayEvents.map(e => <div key={e.id} className={`text-[10px] md:text-xs p-1 rounded border truncate ${e.type === 'checkout' ? 'bg-cyan-950/50 text-cyan-400 border-cyan-800/50' : 'bg-emerald-950/50 text-emerald-400 border-emerald-800/50'}`}>{e.title}</div>)}</div>)}
                     </div>
                   );
                 })}
@@ -579,12 +608,7 @@ const App = () => {
             <div className="mt-6 p-4 bg-slate-900/50 rounded-xl border border-slate-800 animate-fade-in">
               <h4 className="font-bold text-white mb-3 flex items-center gap-2"><Calendar size={16} className="text-cyan-400"/> {monthName} {selectedDate}</h4>
               {getEventsForDay(selectedDate).length === 0 ? <p className="text-slate-500 text-sm">Sector clear. No events.</p> : (
-                <div className="space-y-3">{getEventsForDay(selectedDate).map(e => (
-                    <div key={e.id} className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-sm">
-                        <div><p className="font-bold text-slate-200 text-sm">{e.title}</p><p className="text-xs text-slate-400 uppercase">{e.dept} • {e.fullName}</p></div>
-                        <a href={getGoogleCalendarUrl(e)} target="_blank" rel="noopener noreferrer" className="bg-slate-700 hover:bg-slate-600 p-2 rounded text-white transition-colors"><CalendarPlus size={16}/></a>
-                    </div>
-                ))}</div>
+                <div className="space-y-3">{getEventsForDay(selectedDate).map(e => (<div key={e.id} className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-sm"><div><p className="font-bold text-slate-200 text-sm">{e.title}</p><p className="text-xs text-slate-400 uppercase">{e.dept} • {e.fullName}</p></div><a href={getGoogleCalendarUrl(e)} target="_blank" rel="noopener noreferrer" className="bg-slate-700 hover:bg-slate-600 p-2 rounded text-white transition-colors"><CalendarPlus size={16}/></a></div>))}</div>
               )}
             </div>
           )}
@@ -593,59 +617,17 @@ const App = () => {
     );
   }
 
-  // --- Real-Time Request Queue Component ---
-
   function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
     const [requests, setRequests] = useState([]);
     const [filter, setFilter] = useState('all');
     const [loading, setLoading] = useState(true);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    
-    useEffect(() => {
-      const q = query(collection(db, "requests"), orderBy("createdAt", "desc"));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A' }));
-        setRequests(reqs);
-        setLoading(false);
-      });
-      return () => unsubscribe();
-    }, []);
-
-    const handleStatusUpdate = async (req, newStatus) => {
-      if (!window.confirm(`Confirm status change to: ${newStatus}?`)) return;
-      await updateDoc(doc(db, "requests", req.id), { status: newStatus });
-      if (selectedRequest && selectedRequest.id === req.id) setSelectedRequest(prev => ({...prev, status: newStatus}));
-      sendNotificationEmail({ to_name: req.fullName, to_email: req.email, subject: `Request Update: ${req.title}`, title: req.title, status: newStatus, message: `Status updated to ${newStatus}.` });
-    };
-
-    const handleDelete = async (id) => {
-      if(window.confirm("Delete this record permanently?")) {
-        await deleteDoc(doc(db, "requests", id));
-        if (selectedRequest && selectedRequest.id === id) setSelectedRequest(null);
-      }
-    };
-
-    const downloadCSV = () => {
-      const headers = ["ID", "Department", "Title", "User", "Email", "Date Submitted", "Status", "Details"];
-      const rows = requests.map(row => [row.displayId, row.dept, `"${row.title}"`, row.fullName, row.email, row.formattedDate, row.status, `"${(row.details || row.brief || row.description || '').replace(/"/g, '""')}"` ]);
-      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "cte_requests_export.csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    };
-
-    const filteredRequests = requests.filter(r => {
-        const matchesDept = filter === 'all' ? true : r.dept?.toLowerCase().includes(filter.toLowerCase());
-        const searchLower = searchTerm.toLowerCase();
-        const matchesSearch = r.title?.toLowerCase().includes(searchLower) || r.fullName?.toLowerCase().includes(searchLower) || r.displayId?.toLowerCase().includes(searchLower) || r.email?.toLowerCase().includes(searchLower);
-        return matchesDept && matchesSearch;
-    });
-
+    useEffect(() => { const q = query(collection(db, "requests"), orderBy("createdAt", "desc")); const unsubscribe = onSnapshot(q, (snapshot) => { const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: doc.data().createdAt?.toDate().toLocaleDateString() || 'N/A' })); setRequests(reqs); setLoading(false); }); return () => unsubscribe(); }, []);
+    const handleStatusUpdate = async (req, newStatus) => { if (!window.confirm(`Confirm status change to: ${newStatus}?`)) return; await updateDoc(doc(db, "requests", req.id), { status: newStatus }); if (selectedRequest && selectedRequest.id === req.id) setSelectedRequest(prev => ({...prev, status: newStatus})); sendNotificationEmail({ to_name: req.fullName, to_email: req.email, subject: `Request Update: ${req.title}`, title: req.title, status: newStatus, message: `Status updated to ${newStatus}.` }); };
+    const handleDelete = async (id) => { if(window.confirm("Delete this record permanently?")) { await deleteDoc(doc(db, "requests", id)); if (selectedRequest && selectedRequest.id === id) setSelectedRequest(null); } };
+    const downloadCSV = () => { const headers = ["ID", "Department", "Title", "User", "Email", "Date Submitted", "Status", "Details"]; const rows = requests.map(row => [row.displayId, row.dept, `"${row.title}"`, row.fullName, row.email, row.formattedDate, row.status, `"${(row.details || row.brief || row.description || '').replace(/"/g, '""')}"` ]); const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n'); const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "cte_requests_export.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+    const filteredRequests = requests.filter(r => { const matchesDept = filter === 'all' ? true : r.dept?.toLowerCase().includes(filter.toLowerCase()); const searchLower = searchTerm.toLowerCase(); const matchesSearch = r.title?.toLowerCase().includes(searchLower) || r.fullName?.toLowerCase().includes(searchLower) || r.displayId?.toLowerCase().includes(searchLower) || r.email?.toLowerCase().includes(searchLower); return matchesDept && matchesSearch; });
     const getStatusColor = (status) => { switch(status) { case 'Approved': return 'bg-green-950/50 text-green-400 border-green-500/30'; case 'Denied': return 'bg-red-950/50 text-red-400 border-red-500/30'; case 'Completed': return 'bg-slate-800 text-slate-400 border-slate-700'; default: return 'bg-amber-950/50 text-amber-400 border-amber-500/30'; }};
 
     return (
@@ -679,7 +661,6 @@ const App = () => {
             </div>
           </div>
         )}
-
         <div className="bg-slate-950/50 border-b border-slate-800 p-4 md:p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-white"><ClipboardList className="text-purple-400" /> Request Log</h2><p className="text-slate-400 text-sm">Live Database Feed</p></div>
           <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
@@ -713,54 +694,16 @@ const App = () => {
   }
 
   function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser, blackouts = [] }) { 
+    // ... (Existing Code, keeping component structure)
     const formRef = useRef(null);
     const draftKey = getDraftKey(title);
     const [showExitPrompt, setShowExitPrompt] = useState(false);
-
-    const saveDraftToStorage = () => {
-        const formData = new FormData(formRef.current);
-        const data = {};
-        for (const [key, value] of formData.entries()) { if (data[key]) { if (!Array.isArray(data[key])) data[key] = [data[key]]; data[key].push(value); } else { data[key] = value; } }
-        localStorage.setItem(draftKey, JSON.stringify(data));
-        return true;
-    };
-
+    const saveDraftToStorage = () => { const formData = new FormData(formRef.current); const data = {}; for (const [key, value] of formData.entries()) { if (data[key]) { if (!Array.isArray(data[key])) data[key] = [data[key]]; data[key].push(value); } else { data[key] = value; } } localStorage.setItem(draftKey, JSON.stringify(data)); return true; };
     const handleSaveDraftButton = (e) => { e.preventDefault(); saveDraftToStorage(); alert('Draft secured in local cache.'); };
     const handleCancelRequest = () => { setShowExitPrompt(true); };
     const confirmSaveAndExit = () => { saveDraftToStorage(); setShowExitPrompt(false); onCancel(); };
     const confirmDiscardAndExit = () => { localStorage.removeItem(draftKey); setShowExitPrompt(false); onCancel(); };
-
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = {};
-      for (const [key, value] of formData.entries()) { if (data[key]) { if (!Array.isArray(data[key])) data[key] = [data[key]]; data[key].push(value); } else { data[key] = value; } }
-      
-      const dateFields = ['checkoutDate', 'returnDate', 'eventDate', 'pickupDate', 'deadline'];
-      let conflictFound = false;
-      dateFields.forEach(field => { if (data[field] && blackouts.includes(data[field])) { conflictFound = true; } });
-
-      if (conflictFound) { alert("Date blocked by admin protocol. Select alternative."); return; }
-      
-      try {
-        const timestampSuffix = Date.now().toString().slice(-4);
-        const randomNum = Math.floor(1000 + Math.random() * 9000);
-        const displayId = `REQ-${timestampSuffix}-${randomNum}`;
-
-        await addDoc(collection(db, "requests"), {
-          ...data,
-          dept: title,
-          displayId: displayId, 
-          status: "Pending Review",
-          createdAt: new Date(),
-          title: data.requestName || data.eventName || data.projectType || data.businessName || "New Request" 
-        });
-        
-        sendNotificationEmail({ to_name: "Admin", to_email: "erivers@salpointe.org", subject: `New Request: ${data.requestName}`, title: data.requestName, status: "Pending Review", message: `New request (${displayId}) from ${data.fullName}.` });
-        localStorage.removeItem(draftKey);
-        setSubmitted(true);
-      } catch (error) { console.error(error); alert("Transmission error."); }
-    };
+    const handleSubmit = async (e) => { e.preventDefault(); const formData = new FormData(e.target); const data = {}; for (const [key, value] of formData.entries()) { if (data[key]) { if (!Array.isArray(data[key])) data[key] = [data[key]]; data[key].push(value); } else { data[key] = value; } } const dateFields = ['checkoutDate', 'returnDate', 'eventDate', 'pickupDate', 'deadline']; let conflictFound = false; dateFields.forEach(field => { if (data[field] && blackouts.includes(data[field])) { conflictFound = true; } }); if (conflictFound) { alert("Date blocked by admin protocol. Select alternative."); return; } try { const timestampSuffix = Date.now().toString().slice(-4); const randomNum = Math.floor(1000 + Math.random() * 9000); const displayId = `REQ-${timestampSuffix}-${randomNum}`; await addDoc(collection(db, "requests"), { ...data, dept: title, displayId: displayId, status: "Pending Review", createdAt: new Date(), title: data.requestName || data.eventName || data.projectType || data.businessName || "New Request" }); sendNotificationEmail({ to_name: "Admin", to_email: "erivers@salpointe.org", subject: `New Request: ${data.requestName}`, title: data.requestName, status: "Pending Review", message: `New request (${displayId}) from ${data.fullName}.` }); localStorage.removeItem(draftKey); setSubmitted(true); } catch (error) { console.error(error); alert("Transmission error."); } };
 
     return (
       <div className="max-w-3xl mx-auto bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 overflow-hidden relative">
@@ -801,52 +744,17 @@ const App = () => {
     );
   }
 
-  // --- Department Specific Forms ---
-
   function FilmForm({ setSubmitted, onCancel, currentUser, inventory, blackouts }) { // Added blackouts
+    // ... (Existing Code, keeping logic exact)
     const title = 'Film';
     const draftKey = getDraftKey(title);
     const initialData = JSON.parse(localStorage.getItem(draftKey) || '{}');
     const [requestType, setRequestType] = useState(initialData.requestType || 'checkout'); 
-    
     const [availableStock, setAvailableStock] = useState({});
     const [datesSelected, setDatesSelected] = useState(false);
     const [dateRange, setDateRange] = useState({ start: initialData.checkoutDate || '', end: initialData.returnDate || '' });
-
-    const handleDateChange = (e) => {
-        const newDates = { ...dateRange, [e.target.name === 'checkoutDate' ? 'start' : 'end']: e.target.value };
-        setDateRange(newDates);
-    };
-
-    useEffect(() => {
-        const calculateAvailability = async () => {
-            if (!dateRange.start || !dateRange.end || requestType !== 'checkout') {
-                setDatesSelected(false);
-                return;
-            }
-            setDatesSelected(true);
-            const q = query(collection(db, "requests"), where("dept", "==", "Film"), where("requestType", "==", "checkout"));
-            const querySnapshot = await getDocs(q);
-            const usageCounts = {};
-            querySnapshot.forEach(doc => {
-                const data = doc.data();
-                if (data.status === 'Denied' || data.status === 'Completed') return;
-                const reqStart = data.checkoutDate;
-                const reqEnd = data.returnDate;
-                if (reqStart <= dateRange.end && reqEnd >= dateRange.start) {
-                    if (data.equipment) {
-                        const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment];
-                        items.forEach(item => { usageCounts[item] = (usageCounts[item] || 0) + 1; });
-                    }
-                }
-            });
-            const stockStatus = {};
-            Object.keys(inventory).forEach(item => { stockStatus[item] = Math.max(0, inventory[item] - (usageCounts[item] || 0)); });
-            setAvailableStock(stockStatus);
-        };
-        calculateAvailability();
-    }, [dateRange, requestType, inventory]); 
-
+    const handleDateChange = (e) => { const newDates = { ...dateRange, [e.target.name === 'checkoutDate' ? 'start' : 'end']: e.target.value }; setDateRange(newDates); };
+    useEffect(() => { const calculateAvailability = async () => { if (!dateRange.start || !dateRange.end || requestType !== 'checkout') { setDatesSelected(false); return; } setDatesSelected(true); const q = query(collection(db, "requests"), where("dept", "==", "Film"), where("requestType", "==", "checkout")); const querySnapshot = await getDocs(q); const usageCounts = {}; querySnapshot.forEach(doc => { const data = doc.data(); if (data.status === 'Denied' || data.status === 'Completed') return; const reqStart = data.checkoutDate; const reqEnd = data.returnDate; if (reqStart <= dateRange.end && reqEnd >= dateRange.start) { if (data.equipment) { const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment]; items.forEach(item => { usageCounts[item] = (usageCounts[item] || 0) + 1; }); } } }); const stockStatus = {}; Object.keys(inventory).forEach(item => { stockStatus[item] = Math.max(0, inventory[item] - (usageCounts[item] || 0)); }); setAvailableStock(stockStatus); }; calculateAvailability(); }, [dateRange, requestType, inventory]); 
     const isSingleDay = dateRange.start && dateRange.end && dateRange.start === dateRange.end;
 
     return (
@@ -1072,7 +980,7 @@ const App = () => {
               <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Start Time</label><input name="startTime" defaultValue={initialData.startTime} type="time" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-pink-500 outline-none" required /></div>
             </div>
             <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Location</label><input name="location" defaultValue={initialData.location} type="text" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-pink-500 outline-none" placeholder="e.g., Gym" /></div>
-            <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Shot List</label><textarea name="shotList" defaultValue={initialData.shotList} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-pink-500 outline-none h-24" placeholder="Key moments..."></textarea></div>
+            <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Specific Shots</label><textarea name="shotList" defaultValue={initialData.shotList} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-pink-500 outline-none h-24" placeholder="Key moments..."></textarea></div>
           </div>
         )}
       </FormContainer>
