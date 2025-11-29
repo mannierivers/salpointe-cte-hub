@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'Salpointe CTE Hub',
         short_name: 'CTE Hub',
         description: 'Request equipment and services from Salpointe CTE.',
-        theme_color: '#881E27', // Salpointe Maroon
-        background_color: '#ffffff',
+        theme_color: '#0f172a', // Updated to match your new dark theme
+        background_color: '#0f172a',
         display: 'standalone',
         icons: [
           {
@@ -30,5 +30,24 @@ export default defineConfig({
       }
     })
   ],
-  base: "/salpointe-cte-hub/",
+  base: "/",
+  build: {
+    chunkSizeWarningLimit: 1600, // Increases the warning threshold to 1.6MB
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Splits giant libraries into their own files to keep the main app fast
+          if (id.includes('node_modules')) {
+            if (id.includes('firebase')) {
+              return 'firebase';
+            }
+            if (id.includes('lucide-react')) {
+              return 'icons';
+            }
+            return 'vendor'; // All other libraries
+          }
+        }
+      }
+    }
+  }
 })
