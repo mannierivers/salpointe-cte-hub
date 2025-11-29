@@ -1,34 +1,34 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-      manifest: {
-        name: 'Salpointe CTE Hub',
-        short_name: 'CTE Hub',
-        description: 'Request equipment and services from Salpointe CTE.',
-        theme_color: '#881E27', // Salpointe Maroon
-        background_color: '#ffffff',
-        display: 'standalone',
-        icons: [
-          {
-            src: 'pwa-icon.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-icon.png',
-            sizes: '512x512',
-            type: 'image/png'
+  plugins: [react()],
+  build: {
+    // 1. Increase the warning limit slightly (optional, prevents minor warnings)
+    chunkSizeWarningLimit: 1000, 
+    
+    // 2. Tell Rollup how to split the code
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Put Node Modules (libraries) into separate chunks
+          if (id.includes('node_modules')) {
+            
+            // Split Firebase into its own file (it's heavy)
+            if (id.includes('firebase')) {
+              return 'firebase';
+            }
+            
+            // Split Lucide Icons into its own file (it's heavy)
+            if (id.includes('lucide-react')) {
+              return 'icons';
+            }
+
+            // Put all other libraries (React, etc.) in a 'vendor' file
+            return 'vendor';
           }
-        ]
-      }
-    })
-  ],
-  base: "/salpointe-cte-hub/",
-})
+        },
+      },
+    },
+  },
+});
