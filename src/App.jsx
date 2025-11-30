@@ -435,41 +435,233 @@ const App = () => {
     );
   }
 
-  function InventoryManager({ inventory, setInventory }) {
+ function InventoryManager({ inventory, setInventory }) {
+    // --- STATE MANAGEMENT ---
+    const [isEditing, setIsEditing] = useState(false);
     const [localInventory, setLocalInventory] = useState(inventory);
+    const [isDirty, setIsDirty] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    // --- FORM STATE ---
     const [newItemName, setNewItemName] = useState('');
     const [newItemCount, setNewItemCount] = useState(1);
     const [newItemCategory, setNewItemCategory] = useState('film');
     const [newItemTraining, setNewItemTraining] = useState(false);
-    const [editingKey, setEditingKey] = useState(null);
-    const [editName, setEditName] = useState('');
-    const [editTraining, setEditTraining] = useState(false);
 
-    const handleChange = (item, field, value) => { setLocalInventory(prev => ({ ...prev, [item]: { ...prev[item], [field]: value } })); };
-    const handleDelete = (item) => { if(window.confirm(`Delete "${item}" from inventory permanently?`)) { const updated = { ...localInventory }; delete updated[item]; setLocalInventory(updated); } };
-    const handleAddItem = (e) => { e.preventDefault(); if (!newItemName) return; const name = newItemName.trim(); if (localInventory[name]) { alert("Item already exists."); return; } setLocalInventory(prev => ({ ...prev, [name]: { count: parseInt(newItemCount) || 0, category: newItemCategory, requiresTraining: newItemTraining } })); setNewItemName(''); setNewItemCount(1); setNewItemTraining(false); };
-    const startEditing = (key, data) => { setEditingKey(key); setEditName(key); setEditTraining(data.requiresTraining || false); };
-    const cancelEditing = () => { setEditingKey(null); setEditName(''); setEditTraining(false); };
-    const saveEdit = () => { if (!editName.trim()) return; const newKey = editName.trim(); const itemData = localInventory[editingKey]; const newData = { ...itemData, requiresTraining: editTraining }; const updatedInventory = { ...localInventory }; if (newKey !== editingKey) { if (updatedInventory[newKey]) { alert("An item with this name already exists."); return; } delete updatedInventory[editingKey]; updatedInventory[newKey] = newData; } else { updatedInventory[newKey] = newData; } setLocalInventory(updatedInventory); setEditingKey(null); };
-    
-    const handleSave = async () => { 
-        if (!window.confirm("Are you sure you want to update the live inventory database? This affects all current users.")) return;
-        setSaving(true); 
-        try { await setDoc(doc(db, "settings", "inventory_v2"), localInventory); setInventory(localInventory); alert("Inventory matrix updated."); } 
-        catch (error) { console.error("Error:", error); alert("Save failed."); } 
-        setSaving(false); 
+    // Sync local state when global inventory changes (only if not currently editing)
+    useEffect(() => {
+        if (!isEditing) {
+            setLocalInventory(inventory);
+        }
+    }, [inventory, isEditing]);
+
+    // --- ACTIONS ---
+    const toggleEditMode = () => {
+        if (isEditing && isDirty) {
+            if (!window.confirm("You have unsaved changes. Discard them?")) return;
+        }
+        // If entering edit mode, reset local to match global. If exiting, discard changes.
+        setLocalInventory(inventory); 
+        setIsEditing(!isEditing);
+        setIsDirty(false);
     };
 
+    const handleChange = (name, field, value) => {
+        setLocalInventory(prev => ({
+            ...prev,
+            [name]: { ...prev[name], [field]: value }
+        }));
+        setIsDirty(true);
+    };
+
+    const handleDelete = (name) => {
+        if (window.confirm(`Permanently remove "${name}" from the database?`)) {
+            const updated = { ...localInventory };
+            delete updated[name];
+            setLocalInventory(updated);
+            setIsDirty(true);
+        }
+    };
+
+    const handleAddItem = (e) => {
+        e.preventDefault();
+        if (!newItemName.trim()) return;
+        
+        const name = newItemName.trim();
+        if (localInventory[name]) {
+            alert("An item with this name already exists.");
+            return;
+        }
+
+        setLocalInventory(prev => ({
+            ...prev,
+            [name]: { 
+                count: parseInt(newItemCount) || 0, 
+                category: newItemCategory, 
+                requiresTraining: newItemTraining 
+            }
+        }));
+        
+        // Reset form
+        setNewItemName('');
+        setNewItemCount(1);
+        setIsDirty(true);
+    };
+
+    const handleSave = async () => {
+        if (!window.confirm("Are you sure you want to commit these changes to the live system?")) return;
+        
+        setSaving(true);
+        try {
+            await setDoc(doc(db, "settings", "inventory_v2"), localInventory);
+            setInventory(localInventory); // Update global app state
+            setIsEditing(false);
+            setIsDirty(false);
+            alert("✅ Inventory Database Updated Successfully");
+        } catch (error) {
+            console.error("Save failed:", error);
+            alert("❌ Error: Could not save changes.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // Helper: Group items by category for cleaner display
     const groupedItems = { film: [], photo: [], culinary: [], general: [] };
-    Object.entries(localInventory).forEach(([name, data]) => { if (groupedItems[data.category]) groupedItems[data.category].push({ name, ...data }); else groupedItems['general'].push({ name, ...data }); });
+    Object.entries(localInventory).forEach(([name, data]) => {
+        const cat = data.category || 'general';
+        if (groupedItems[cat]) groupedItems[cat].push({ name, ...data });
+        else groupedItems['general'].push({ name, ...data });
+    });
 
     return (
-        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-            <div className="bg-slate-950/50 border-b border-slate-800 p-6 flex justify-between items-center"><div><h2 className="text-xl font-bold text-white flex items-center gap-2"><Settings className="text-amber-400" /> Inventory Matrix</h2></div><button onClick={handleSave} disabled={saving} className="bg-amber-600 hover:bg-amber-500 text-slate-900 px-6 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 shadow-[0_0_15px_rgba(245,158,11,0.3)]">{saving ? <RefreshCw className="animate-spin" size={18}/> : <Save size={18}/>} {saving ? 'Processing...' : 'Save Changes'}</button></div>
-            <div className="p-6 bg-slate-900/30 border-b border-slate-800"><h3 className="text-sm font-mono text-cyan-500 uppercase mb-3">Add New Asset</h3><form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end"><div className="flex-1 w-full"><label className="block text-xs text-slate-500 mb-1">Item Name</label><input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" placeholder="e.g. GoPro Hero 10" required /></div><div className="w-24"><label className="block text-xs text-slate-500 mb-1">Count</label><input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none" /></div><div className="w-32"><label className="block text-xs text-slate-500 mb-1">Category</label><select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"><option value="film">Film</option><option value="photo">Photo</option><option value="culinary">Culinary</option><option value="general">General</option></select></div><div className="flex items-center gap-2 pb-2"><input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500" /><label className="text-sm text-slate-400">Training Req.</label></div><button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-medium flex items-center gap-1"><Plus size={16}/> Add</button></form></div>
-            <div className="p-6 space-y-8">{Object.entries(groupedItems).map(([cat, items]) => (<div key={cat}><h3 className="text-lg font-bold text-white capitalize mb-4 border-b border-slate-800 pb-2 text-emerald-400">{cat} Inventory</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{items.map((item) => (<div key={item.name} className="bg-slate-800/30 p-3 rounded-lg border border-slate-700 flex justify-between items-center hover:border-slate-600 transition-colors">{editingKey === item.name ? (<div className="flex-1 flex items-center gap-2 mr-2"><input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 bg-slate-950 border border-cyan-500 rounded p-1 text-white text-sm outline-none" autoFocus /><label className="flex items-center gap-1 text-xs text-slate-400"><input type="checkbox" checked={editTraining} onChange={e => setEditTraining(e.target.checked)} /> Train</label><button onClick={saveEdit} className="text-green-500 hover:text-green-400 p-1"><Check size={18}/></button><button onClick={cancelEditing} className="text-red-500 hover:text-red-400 p-1"><X size={18}/></button></div>) : (<div className="flex-1 mr-4 flex items-center justify-between"><div><span className="font-mono text-slate-300 text-sm block truncate">{item.name.replace(' *','').replace('*','')}</span>{item.requiresTraining && <span className="text-[10px] text-red-400 uppercase bg-red-900/20 px-1 rounded">Training Req.</span>}</div><button onClick={() => startEditing(item.name, item)} className="text-slate-600 hover:text-cyan-400 p-1 ml-2"><Edit2 size={14}/></button></div>)}<div className="flex items-center gap-2 border-l border-slate-700 pl-3"><span className="text-xs text-slate-500 uppercase">Qty</span><input type="number" min="0" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value))} className="w-14 p-1 bg-slate-950 border border-slate-700 rounded text-center font-bold text-cyan-400 focus:border-cyan-500 outline-none text-sm"/><button onClick={() => handleDelete(item.name)} className="text-slate-600 hover:text-red-500 transition-colors ml-1"><Trash2 size={16}/></button></div></div>))}</div></div>))}</div>
+      <div className={`bg-slate-900/80 backdrop-blur-xl rounded-2xl border overflow-hidden shadow-2xl transition-colors duration-300 ${isEditing ? 'border-indigo-500/30' : 'border-slate-800'}`}>
+        
+        {/* --- HEADER --- */}
+        <div className={`p-6 border-b flex flex-col sm:flex-row justify-between items-center gap-4 transition-colors ${isEditing ? 'bg-indigo-950/20 border-indigo-500/30' : 'bg-slate-950/50 border-slate-800'}`}>
+            <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Settings className={isEditing ? "text-indigo-400" : "text-amber-400"} /> 
+                    Inventory Master List
+                </h2>
+                <p className={`text-sm transition-colors ${isEditing ? 'text-indigo-300' : 'text-slate-400'}`}>
+                    {isEditing ? "EDIT MODE ACTIVE: Review changes before saving." : "View-only mode. Authenticated admins may edit."}
+                </p>
+            </div>
+            
+            <div className="flex gap-3">
+                {isEditing ? (
+                    <>
+                        <button onClick={toggleEditMode} className="px-4 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent hover:border-slate-600 transition-all">
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleSave} 
+                            disabled={!isDirty || saving}
+                            className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all ${!isDirty ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' : 'bg-green-600 hover:bg-green-500 text-white'}`}
+                        >
+                            {saving ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
+                            Save Changes
+                        </button>
+                    </>
+                ) : (
+                    <button onClick={toggleEditMode} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg hover:shadow-indigo-500/20 transition-all">
+                        <Edit2 size={18} /> Edit Inventory
+                    </button>
+                )}
+            </div>
         </div>
+        
+        {/* --- ADD NEW ITEM FORM (Only visible in Edit Mode) --- */}
+        {isEditing && (
+            <div className="p-6 bg-slate-900/50 border-b border-indigo-500/20 animate-fade-in">
+                <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                    <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Plus size={14}/> Add New Asset</h3>
+                    <form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end">
+                        <div className="flex-1 w-full">
+                            <label className="block text-xs text-slate-500 mb-1 ml-1">Asset Name</label>
+                            <input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all" placeholder="e.g. GoPro Hero 11 Black" />
+                        </div>
+                        <div className="w-24">
+                            <label className="block text-xs text-slate-500 mb-1 ml-1">Qty</label>
+                            <input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all" />
+                        </div>
+                        <div className="w-40">
+                            <label className="block text-xs text-slate-500 mb-1 ml-1">Category</label>
+                            <select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all">
+                                <option value="film">Film & TV</option>
+                                <option value="photo">Photography</option>
+                                <option value="culinary">Culinary Arts</option>
+                                <option value="general">General Stock</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2 pb-3 px-2">
+                            <input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded bg-slate-950 border-slate-600 accent-indigo-500 cursor-pointer" />
+                            <label className="text-xs text-slate-400 cursor-pointer" onClick={() => setNewItemTraining(!newItemTraining)}>Training Req.</label>
+                        </div>
+                        <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-lg transition-all shadow-lg hover:shadow-indigo-500/20"><Plus size={20} /></button>
+                    </form>
+                </div>
+            </div>
+        )}
+
+        {/* --- INVENTORY LIST --- */}
+        <div className="p-6 space-y-8">
+            {Object.entries(groupedItems).map(([cat, items]) => (
+                items.length > 0 && (
+                    <div key={cat} className="animate-fade-in">
+                        <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-4 border-b border-slate-800 pb-2 flex items-center gap-3">
+                            <span className={`w-2 h-2 rounded-full ${cat === 'film' ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]' : cat === 'photo' ? 'bg-pink-400 shadow-[0_0_8px_rgba(244,114,182,0.6)]' : cat === 'culinary' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]' : 'bg-slate-400'}`}></span>
+                            {cat} Inventory
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {items.map((item) => (
+                                <div key={item.name} className={`group relative p-3 rounded-xl border transition-all duration-300 ${isEditing ? 'bg-slate-900 border-indigo-900/30' : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'}`}>
+                                    <div className="flex justify-between items-center h-full">
+                                        
+                                        {/* Left Side: Name & Training Flag */}
+                                        <div className="flex-1 mr-4 min-w-0">
+                                            <div className="font-medium text-slate-200 text-sm truncate" title={item.name}>{item.name}</div>
+                                            
+                                            {isEditing ? (
+                                                <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer w-fit p-1 -ml-1 rounded hover:bg-slate-800 transition-colors">
+                                                    <input type="checkbox" checked={item.requiresTraining} onChange={(e) => handleChange(item.name, 'requiresTraining', e.target.checked)} className="rounded border-slate-600 bg-slate-800 accent-red-500 w-3 h-3" />
+                                                    <span className={`text-[10px] uppercase font-bold tracking-wide ${item.requiresTraining ? 'text-red-400' : 'text-slate-600'}`}>Training Required</span>
+                                                </label>
+                                            ) : (
+                                                item.requiresTraining && <div className="mt-1"><span className="text-[10px] font-bold text-red-400 bg-red-950/30 border border-red-900/50 px-2 py-0.5 rounded-full inline-flex items-center gap-1"><AlertCircle size={8} /> TRAINING REQ</span></div>
+                                            )}
+                                        </div>
+
+                                        {/* Right Side: Quantity & Delete */}
+                                        <div className="flex items-center gap-3">
+                                            {isEditing ? (
+                                                <>
+                                                    <div className="flex items-center bg-slate-950 rounded-lg border border-slate-700 overflow-hidden">
+                                                        <button onClick={() => handleChange(item.name, 'count', Math.max(0, item.count - 1))} className="px-2 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors bg-slate-900 border-r border-slate-800 active:bg-slate-700">-</button>
+                                                        <input type="number" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value) || 0)} className="w-12 text-center bg-transparent text-sm font-mono text-white focus:outline-none appearance-none font-bold" />
+                                                        <button onClick={() => handleChange(item.name, 'count', item.count + 1)} className="px-2 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors bg-slate-900 border-l border-slate-800 active:bg-slate-700">+</button>
+                                                    </div>
+                                                    <button onClick={() => handleDelete(item.name)} className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg border border-transparent hover:border-red-900/30 transition-all" title="Delete Asset">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <div className="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex flex-col items-center min-w-[50px]">
+                                                    <span className={`text-sm font-mono font-bold ${item.count === 0 ? 'text-red-500' : 'text-cyan-400'}`}>{item.count}</span>
+                                                    <span className="text-[9px] text-slate-600 uppercase font-bold tracking-wider">Stock</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )
+            ))}
+        </div>
+      </div>
     );
   }
 
