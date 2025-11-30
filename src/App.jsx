@@ -218,7 +218,6 @@ const App = () => {
 
       <header className="bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 sticky top-0 z-50 shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
         <div className="max-w-7xl mx-auto px-4 py-3 md:py-4 flex flex-wrap items-center justify-between gap-y-3 relative z-10">
-          
           <div className="flex items-center space-x-4 cursor-pointer group" onClick={goHome}>
             <div className="relative">
                 <div className="absolute inset-0 bg-red-600 blur-lg opacity-40 group-hover:opacity-60 transition-opacity rounded-full"></div>
@@ -232,7 +231,7 @@ const App = () => {
             </div>
           </div>
           
-          {/* MOBILE LOGOUT BUTTON (Absolute Top Right) */}
+          {/* MOBILE LOGOUT BUTTON */}
           {currentUser && (
             <button 
                 onClick={handleLogout} 
@@ -277,7 +276,6 @@ const App = () => {
                       </>
                     )}
                     
-                    {/* DESKTOP LOGOUT (Hidden on Mobile) */}
                     <div className="hidden md:block w-px h-6 bg-slate-700 mx-1"></div>
                     <button onClick={handleLogout} className="hidden md:flex ml-1 text-xs md:text-sm font-medium px-3 py-2 rounded-lg border border-red-900/30 hover:border-red-500 text-red-400 hover:bg-red-950/30 transition-all items-center gap-2" title={`Logged in as ${currentUser.email}`}>
                         <LogOut size={16} />
@@ -631,7 +629,7 @@ const App = () => {
     );
   }
 
- function InventoryManager({ inventory, setInventory }) {
+  function InventoryManager({ inventory, setInventory }) {
     // --- STATE MANAGEMENT ---
     const [isEditing, setIsEditing] = useState(false);
     const [localInventory, setLocalInventory] = useState(inventory);
