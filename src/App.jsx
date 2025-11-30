@@ -644,7 +644,7 @@ const App = () => {
     const [newItemCategory, setNewItemCategory] = useState('film');
     const [newItemTraining, setNewItemTraining] = useState(false);
 
-    // Sync local state when global inventory changes (only if not currently editing)
+    // Sync local state when global inventory changes
     useEffect(() => {
         if (!isEditing) {
             setLocalInventory(inventory);
@@ -656,7 +656,6 @@ const App = () => {
         if (isEditing && isDirty) {
             if (!window.confirm("You have unsaved changes. Discard them?")) return;
         }
-        // If entering edit mode, reset local to match global. If exiting, discard changes.
         setLocalInventory(inventory); 
         setIsEditing(!isEditing);
         setIsDirty(false);
@@ -698,7 +697,6 @@ const App = () => {
             }
         }));
         
-        // Reset form
         setNewItemName('');
         setNewItemCount(1);
         setIsDirty(true);
@@ -710,7 +708,7 @@ const App = () => {
         setSaving(true);
         try {
             await setDoc(doc(db, "settings", "inventory_v2"), localInventory);
-            setInventory(localInventory); // Update global app state
+            setInventory(localInventory); 
             setIsEditing(false);
             setIsDirty(false);
             alert("✅ Inventory Database Updated Successfully");
@@ -722,13 +720,26 @@ const App = () => {
         }
     };
 
-    // Helper: Group items by category for cleaner display
-    const groupedItems = { film: [], photo: [], culinary: [], general: [] };
-    Object.entries(localInventory).forEach(([name, data]) => {
-        const cat = data.category || 'general';
-        if (groupedItems[cat]) groupedItems[cat].push({ name, ...data });
-        else groupedItems['general'].push({ name, ...data });
-    });
+    // --- GROUPING LOGIC (Fixed Order) ---
+    // This ensures distinct sections always appear in this specific order
+    const SECTIONS = [
+        { id: 'film', label: 'Film & TV Equipment', icon: Video, color: 'text-cyan-400', border: 'border-cyan-500/30', bg: 'bg-cyan-950/20' },
+        { id: 'photo', label: 'Photography Gear', icon: Camera, color: 'text-pink-400', border: 'border-pink-500/30', bg: 'bg-pink-950/20' },
+        { id: 'culinary', label: 'Culinary Supplies', icon: Utensils, color: 'text-amber-400', border: 'border-amber-500/30', bg: 'bg-amber-950/20' },
+        { id: 'general', label: 'General Stock', icon: Box, color: 'text-slate-400', border: 'border-slate-700', bg: 'bg-slate-900/50' }
+    ];
+
+    const getGroupedInventory = () => {
+        const grouped = { film: [], photo: [], culinary: [], general: [] };
+        Object.entries(localInventory).forEach(([name, data]) => {
+            const cat = data.category || 'general';
+            if (grouped[cat]) grouped[cat].push({ name, ...data });
+            else grouped['general'].push({ name, ...data });
+        });
+        return grouped;
+    };
+
+    const groupedData = getGroupedInventory();
 
     return (
       <div className={`bg-slate-900/80 backdrop-blur-xl rounded-2xl border overflow-hidden shadow-2xl transition-colors duration-300 ${isEditing ? 'border-indigo-500/30' : 'border-slate-800'}`}>
@@ -801,17 +812,25 @@ const App = () => {
             </div>
         )}
 
-        {/* --- INVENTORY LIST --- */}
+        {/* --- INVENTORY LIST (SEPARATED SECTIONS) --- */}
         <div className="p-6 space-y-8">
-            {Object.entries(groupedItems).map(([cat, items]) => (
-                items.length > 0 && (
-                    <div key={cat} className="animate-fade-in">
-                        <h3 className="text-sm font-bold text-white uppercase tracking-widest mb-4 border-b border-slate-800 pb-2 flex items-center gap-3">
-                            <span className={`w-2 h-2 rounded-full ${cat === 'film' ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]' : cat === 'photo' ? 'bg-pink-400 shadow-[0_0_8px_rgba(244,114,182,0.6)]' : cat === 'culinary' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]' : 'bg-slate-400'}`}></span>
-                            {cat} Inventory
-                        </h3>
+            {SECTIONS.map((section) => {
+                const items = groupedData[section.id];
+                if (!items || items.length === 0) return null;
+
+                return (
+                    <div key={section.id} className="animate-fade-in">
+                        {/* Section Header */}
+                        <div className={`flex items-center gap-3 mb-4 pb-2 border-b ${section.border}`}>
+                            <div className={`p-2 rounded-lg ${section.bg} ${section.color}`}>
+                                <section.icon size={20} />
+                            </div>
+                            <h3 className={`text-lg font-bold ${section.color}`}>{section.label}</h3>
+                        </div>
+
+                        {/* Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {items.map((item) => (
+                            {items.sort((a, b) => a.name.localeCompare(b.name)).map((item) => (
                                 <div key={item.name} className={`group relative p-3 rounded-xl border transition-all duration-300 ${isEditing ? 'bg-slate-900 border-indigo-900/30' : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'}`}>
                                     <div className="flex justify-between items-center h-full">
                                         
@@ -854,8 +873,8 @@ const App = () => {
                             ))}
                         </div>
                     </div>
-                )
-            ))}
+                );
+            })}
         </div>
       </div>
     );
