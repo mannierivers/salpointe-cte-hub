@@ -631,7 +631,7 @@ const App = () => {
     );
   }
 
-  function InventoryManager({ inventory, setInventory }) {
+ function InventoryManager({ inventory, setInventory }) {
     // --- STATE MANAGEMENT ---
     const [isEditing, setIsEditing] = useState(false);
     const [localInventory, setLocalInventory] = useState(inventory);
