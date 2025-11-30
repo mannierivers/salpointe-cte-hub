@@ -807,7 +807,142 @@ const App = () => {
           <div className="max-w-3xl mx-auto bg-black border-4 border-slate-700 rounded-xl overflow-hidden font-mono shadow-2xl relative animate-fade-in select-none"><div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]"></div><div className="bg-slate-900 p-4 border-b-4 border-slate-700 flex justify-between items-center relative z-20"><div className="text-green-400 text-xs flex items-center gap-2"><Gamepad2 size={14}/> LANCER_RUN.EXE</div><div className="text-yellow-400 text-xs flex items-center gap-2"><Trophy size={14}/> HI-SCORE: {highScore}</div><button onClick={onExit} className="text-red-500 hover:text-red-400 text-xs uppercase font-bold">[ EXIT SYSTEM ]</button></div><div className="relative bg-slate-950" style={{ height: '300px' }}><canvas ref={canvasRef} width={700} height={300} className="w-full h-full block"/>{gameState === 'start' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-20"><h2 className="text-4xl font-bold text-cyan-400 mb-4 tracking-widest glitch-text">LANCER RUN</h2><p className="text-slate-300 text-sm mb-6">Space/Up to Jump. Avoid the F's!</p><button onClick={startGame} className="px-6 py-2 bg-green-600 hover:bg-green-500 text-black font-bold rounded blink-anim">INSERT COIN (START)</button></div>)}{gameState === 'gameover' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/40 z-20 backdrop-blur-sm"><h2 className="text-4xl font-bold text-red-500 mb-2">CRITICAL FAILURE</h2><p className="text-white text-xl mb-6">FINAL SCORE: {score}</p><button onClick={startGame} className="px-6 py-2 bg-white text-black font-bold rounded hover:bg-slate-200">RETRY MISSION</button></div>)}</div></div>
       );
   }
+// *** PASTE THIS MISSING COMPONENT AT THE BOTTOM OF YOUR FILE ***
+  function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser, blackouts = [] }) { 
+      const formRef = useRef(null);
+      const draftKey = getDraftKey(title);
+      const [showExitPrompt, setShowExitPrompt] = useState(false);
 
+      const saveDraftToStorage = () => { 
+          const formData = new FormData(formRef.current); 
+          const data = {}; 
+          for (const [key, value] of formData.entries()) { 
+              if (data[key]) { 
+                  if (!Array.isArray(data[key])) data[key] = [data[key]]; 
+                  data[key].push(value); 
+              } else { 
+                  data[key] = value; 
+              } 
+          } 
+          localStorage.setItem(draftKey, JSON.stringify(data)); 
+          return true; 
+      };
+
+      const handleSaveDraftButton = (e) => { 
+          e.preventDefault(); 
+          saveDraftToStorage(); 
+          alert('Draft secured in local cache.'); 
+      };
+
+      const handleCancelRequest = () => { setShowExitPrompt(true); };
+      
+      const confirmSaveAndExit = () => { 
+          saveDraftToStorage(); 
+          setShowExitPrompt(false); 
+          onCancel(); 
+      };
+      
+      const confirmDiscardAndExit = () => { 
+          localStorage.removeItem(draftKey); 
+          setShowExitPrompt(false); 
+          onCancel(); 
+      };
+
+      const handleSubmit = async (e) => { 
+          e.preventDefault(); 
+          const formData = new FormData(e.target); 
+          const data = {}; 
+          for (const [key, value] of formData.entries()) { 
+              if (data[key]) { 
+                  if (!Array.isArray(data[key])) data[key] = [data[key]]; 
+                  data[key].push(value); 
+              } else { 
+                  data[key] = value; 
+              } 
+          } 
+          
+          const dateFields = ['checkoutDate', 'returnDate', 'eventDate', 'pickupDate', 'deadline']; 
+          let conflictFound = false; 
+          dateFields.forEach(field => { 
+              if (data[field] && blackouts.includes(data[field])) { 
+                  conflictFound = true; 
+              } 
+          }); 
+          
+          if (conflictFound) { 
+              alert("Date blocked by admin protocol. Select alternative."); 
+              return; 
+          } 
+          
+          try { 
+              const timestampSuffix = Date.now().toString().slice(-4); 
+              const randomNum = Math.floor(1000 + Math.random() * 9000); 
+              const displayId = `REQ-${timestampSuffix}-${randomNum}`; 
+              
+              await addDoc(collection(db, "requests"), { 
+                  ...data, 
+                  dept: title, 
+                  displayId: displayId, 
+                  status: "Pending Review", 
+                  createdAt: new Date(), 
+                  title: data.requestName || data.eventName || data.projectType || data.businessName || "New Request" 
+              }); 
+              
+              sendNotificationEmail({ 
+                  to_name: "Admin", 
+                  to_email: "erivers@salpointe.org", 
+                  subject: `New Request: ${data.requestName}`, 
+                  title: data.requestName, 
+                  status: "Pending Review", 
+                  message: `New request (${displayId}) from ${data.fullName}.` 
+              }); 
+              
+              localStorage.removeItem(draftKey); 
+              setSubmitted(true); 
+          } catch (error) { 
+              console.error(error); 
+              alert("Transmission error."); 
+          } 
+      };
+
+      return (
+        <div className="max-w-3xl mx-auto bg-slate-900/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 overflow-hidden relative">
+          {showExitPrompt && (
+              <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fade-in">
+                  <div className="bg-slate-900 rounded-xl shadow-2xl border border-slate-700 max-w-md w-full p-6 text-center">
+                      <div className="w-16 h-16 bg-amber-900/20 rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500 border border-amber-500/20"><AlertTriangle size={32} /></div>
+                      <h3 className="text-xl font-bold text-white mb-2">Unsaved Data Detected</h3>
+                      <p className="text-slate-400 mb-6">Secure local draft before termination?</p>
+                      <div className="flex flex-col gap-3">
+                          <button onClick={confirmSaveAndExit} className="w-full bg-cyan-600 text-white py-3 rounded-lg font-semibold hover:bg-cyan-500 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(8,145,178,0.3)]"><Save size={18} /> Secure Draft & Exit</button>
+                          <button onClick={confirmDiscardAndExit} className="w-full bg-transparent border border-red-900/50 text-red-400 py-3 rounded-lg font-semibold hover:bg-red-950/30 hover:border-red-500 transition-all">Purge Data & Exit</button>
+                          <button onClick={() => setShowExitPrompt(false)} className="w-full text-slate-500 py-2 hover:text-slate-300 text-sm">Return to Editor</button>
+                      </div>
+                  </div>
+              </div>
+          )}
+          <div className={`h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-50`}></div>
+          <div className="p-5 md:p-8">
+            <div className="flex items-center justify-between mb-6 md:mb-8 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl bg-slate-800 border border-slate-700 ${colorClass.replace('bg-', 'text-')}`}><Icon size={28} /></div>
+                  <div><h2 className="text-2xl font-bold text-white tracking-wide">{title} Protocol</h2><p className="text-slate-500 text-xs md:text-sm font-mono uppercase">Input Required Data</p></div>
+              </div>
+              <button type="button" onClick={handleCancelRequest} className="text-slate-500 hover:text-white hover:bg-slate-800 p-2 rounded-full transition-colors"><X size={24} /></button>
+            </div>
+            <form ref={formRef} onSubmit={handleSubmit}>
+              <ContactSection initialData={initialData} currentUser={currentUser} />
+              {children}
+              <div className="mt-8 flex flex-col-reverse sm:flex-row justify-end gap-3 pt-6 border-t border-slate-800">
+                <button type="button" onClick={handleCancelRequest} className="flex items-center justify-center gap-2 bg-transparent border border-slate-700 text-slate-400 px-6 py-3 rounded-lg font-semibold hover:bg-slate-800 hover:text-white transition-all">Abort</button>
+                <button type="button" onClick={handleSaveDraftButton} className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-cyan-400 px-6 py-3 rounded-lg font-semibold hover:bg-slate-700 hover:border-cyan-500/50 transition-all"><Save size={18} /> Save Draft</button>
+                <button type="submit" className="w-full sm:w-auto bg-cyan-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-cyan-500 transition-all shadow-[0_0_20px_rgba(8,145,178,0.4)] tracking-wide">INITIALIZE REQUEST</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+  }
 };
 
 export default App;
