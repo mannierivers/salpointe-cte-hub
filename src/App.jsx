@@ -1,58 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Camera, 
-  Video, 
-  PenTool, 
-  Briefcase, 
-  Utensils, 
-  ArrowLeft, 
-  CheckCircle, 
-  Calendar, 
-  Clock, 
-  User, 
-  Mail, 
-  Users,
-  Box,
-  MonitorPlay,
-  ClipboardList, 
-  Clock3,
-  Menu,
-  Lock,
-  Unlock,
-  Check,
-  X,
-  Eye, 
-  CalendarPlus,
-  Save,
-  LogOut,
-  Hash,
-  AlertCircle,
-  AlertTriangle,
-  History,
-  LogIn,
-  BarChart3,
-  TrendingUp,
-  PieChart,
-  Settings,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  Search,
-  Ban,
-  Cpu,
-  Zap,        
-  FileX,      
-  ShieldCheck,
-  Plus, 
-  Trash2,
-  Edit2,
-  MessageSquare, 
-  Bug,           
-  Lightbulb,     
-  CheckSquare,
-  Gamepad2,
-  Trophy 
+  Camera, Video, PenTool, Briefcase, Utensils, ArrowLeft, CheckCircle, Calendar, 
+  Clock, User, Mail, Users, Box, MonitorPlay, ClipboardList, Clock3, Menu, Lock, 
+  Unlock, Check, X, Eye, CalendarPlus, Save, LogOut, Hash, AlertCircle, 
+  AlertTriangle, History, LogIn, BarChart3, TrendingUp, PieChart, Settings, 
+  RefreshCw, ChevronLeft, ChevronRight, Download, Search, Ban, Cpu, Zap, 
+  FileX, ShieldCheck, Plus, Trash2, Edit2, MessageSquare, Bug, Lightbulb, 
+  CheckSquare, Gamepad2, Trophy 
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -129,14 +83,9 @@ const sendNotificationEmail = (templateParams) => {
     .then((response) => console.log('EMAIL SUCCESS!', response.status, response.text), (err) => console.log('EMAIL FAILED...', err));
 };
 
-// *** HELPER: Safe Date Formatter ***
 const formatDateSafe = (timestamp) => {
     if (!timestamp || !timestamp.toDate) return 'N/A';
-    try {
-        return timestamp.toDate().toLocaleDateString();
-    } catch (e) {
-        return 'Invalid Date';
-    }
+    try { return timestamp.toDate().toLocaleDateString(); } catch (e) { return 'Invalid Date'; }
 };
 
 const App = () => {
@@ -165,13 +114,18 @@ const App = () => {
 
   useEffect(() => {
     const fetchInventory = async () => {
-        const docRef = doc(db, "settings", "inventory_v2"); 
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            setInventory(docSnap.data());
-        } else { 
-            await setDoc(docRef, DEFAULT_INVENTORY); 
-            setInventory(DEFAULT_INVENTORY); 
+        try {
+            const docRef = doc(db, "settings", "inventory_v2"); 
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                setInventory(docSnap.data());
+            } else { 
+                await setDoc(docRef, DEFAULT_INVENTORY); 
+                setInventory(DEFAULT_INVENTORY); 
+            }
+        } catch (err) {
+            console.error("Inventory fetch failed, using default", err);
+            setInventory(DEFAULT_INVENTORY);
         }
     };
     fetchInventory();
@@ -199,7 +153,6 @@ const App = () => {
   const goHome = () => { setCurrentView('landing'); setSubmitted(false); };
   const goToDashboard = () => { setCurrentView(Departments.DASHBOARD); setSubmitted(false); };
 
-  // EASTER EGG HANDLER
   const handleSecretClick = () => {
       const newCount = logoClicks + 1;
       setLogoClicks(newCount);
@@ -231,13 +184,8 @@ const App = () => {
             </div>
           </div>
           
-          {/* MOBILE LOGOUT BUTTON */}
           {currentUser && (
-            <button 
-                onClick={handleLogout} 
-                className="md:hidden absolute top-3 right-4 p-2 rounded-full bg-slate-800 border border-red-900/50 text-red-400 hover:bg-slate-700 z-50"
-                title="Logout"
-            >
+            <button onClick={handleLogout} className="md:hidden absolute top-3 right-4 p-2 rounded-full bg-slate-800 border border-red-900/50 text-red-400 hover:bg-slate-700 z-50" title="Logout">
                 <LogOut size={18} />
             </button>
           )}
@@ -275,7 +223,6 @@ const App = () => {
                         </button>
                       </>
                     )}
-                    
                     <div className="hidden md:block w-px h-6 bg-slate-700 mx-1"></div>
                     <button onClick={handleLogout} className="hidden md:flex ml-1 text-xs md:text-sm font-medium px-3 py-2 rounded-lg border border-red-900/30 hover:border-red-500 text-red-400 hover:bg-red-950/30 transition-all items-center gap-2" title={`Logged in as ${currentUser.email}`}>
                         <LogOut size={16} />
@@ -298,7 +245,6 @@ const App = () => {
             {currentView === Departments.LANDING && <LandingPage currentUser={currentUser} onLogin={handleLogin} onEnter={goToDashboard} />}
             {currentView === Departments.DASHBOARD && <ServiceGrid onViewChange={setCurrentView} currentUser={currentUser} />}
             
-            {/* Forms receive blackouts for validation */}
             {currentView === Departments.FILM && <FilmForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} inventory={inventory} blackouts={blackouts} />}
             {currentView === Departments.GRAPHIC && <GraphicDesignForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
             {currentView === Departments.BUSINESS && <BusinessForm setSubmitted={setSubmitted} onCancel={goToDashboard} currentUser={currentUser} />}
@@ -319,12 +265,9 @@ const App = () => {
       <footer className="text-center py-8 px-4 border-t border-slate-800/50 mt-auto relative z-10 bg-slate-900/50">
         <div className="flex flex-col items-center justify-center gap-3 opacity-60 hover:opacity-100 transition-opacity duration-500">
             <img src={salpointeLogo} alt="Salpointe Catholic High School" className="w-8 h-8 opacity-80 grayscale hover:grayscale-0 transition-all" />
-            
-            {/* SECRET TRIGGER HERE */}
             <p onClick={handleSecretClick} className="text-slate-500 text-xs font-mono tracking-widest uppercase cursor-default select-none">
                 &copy; {new Date().getFullYear()} Salpointe Catholic High School <span className="text-slate-700 mx-2">|</span> CTE Department
             </p>
-            
             <button onClick={() => setCurrentView(Departments.FEEDBACK)} className="text-xs text-cyan-600 hover:text-cyan-400 flex items-center gap-1 transition-colors mt-2">
                 <MessageSquare size={12} /> Feedback & Support
             </button>
@@ -431,6 +374,32 @@ const App = () => {
         </div>
       </div>
     );
+  }
+
+  function InventorySelector({ inventory, category }) {
+      // *** WHITE SCREEN FIX #1: Guard Clause ***
+      if (!inventory) return <div className="p-4 text-xs text-slate-500 border border-slate-800 rounded bg-slate-950/50">Inventory data initializing...</div>;
+
+      const filteredItems = Object.entries(inventory).filter(([_, item]) => item?.category === category);
+      
+      if (filteredItems.length === 0) return <div className="p-4 text-xs text-slate-500">No items available in this category.</div>;
+
+      return (
+          <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800 mt-4">
+              <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 border-b border-slate-800 pb-2">Equipment Request</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {filteredItems.map(([name, item]) => (
+                      <div key={name} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded hover:border-slate-600 transition-colors">
+                          <div className="flex flex-col">
+                              <span className="text-sm text-slate-200 font-medium">{name}</span>
+                              {item.requiresTraining && <span className="text-[10px] text-amber-500 flex items-center gap-1"><AlertCircle size={10} /> Training Req.</span>}
+                          </div>
+                          <input type="number" name={`gear_${name}`} min="0" max="5" placeholder="0" className="w-12 bg-slate-950 border border-slate-700 rounded p-1 text-center text-white text-sm focus:border-cyan-500 outline-none" />
+                      </div>
+                  ))}
+              </div>
+          </div>
+      );
   }
 
   function MyRequestsView({ currentUser }) {
@@ -616,59 +585,67 @@ const App = () => {
   }
 
   function AnalyticsView() {
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, deptCounts: {}, topEquipment: [] });
+    useEffect(() => {
+        const q = query(collection(db, "requests"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            let total = 0, approved = 0, pending = 0, deptCounts = {}, equipmentCounts = {};
+            snapshot.forEach(doc => {
+            const data = doc.data(); total++;
+            if (data.status === 'Approved' || data.status === 'Completed') approved++;
+            if (data.status === 'Pending Review') pending++;
+            deptCounts[data.dept] = (deptCounts[data.dept] || 0) + 1;
+            if (data.equipment) { const items = Array.isArray(data.equipment) ? data.equipment : [data.equipment]; items.forEach(item => { equipmentCounts[item] = (equipmentCounts[item] || 0) + 1; }); }
+            });
+            const sortedEquipment = Object.entries(equipmentCounts).sort(([,a], [,b]) => b - a).slice(0, 5);
+            setStats({ total, approved, pending, deptCounts, topEquipment: sortedEquipment });
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+    const approvalRate = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
     return (
-        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-12 text-center animate-fade-in">
-            <div className="inline-flex p-4 rounded-full bg-emerald-900/20 text-emerald-400 mb-6 shadow-[0_0_20px_rgba(52,211,153,0.3)]">
-                <BarChart3 size={48} />
-            </div>
-            <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">Analytics Module</h2>
-            <p className="text-slate-400 max-w-md mx-auto leading-relaxed">
-                Data visualization protocols are currently compiling. This module will track usage frequency, peak request times, and inventory depletion rates.
-            </p>
+        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between mb-6"><div><h2 className="text-2xl font-bold text-white flex items-center gap-2"><TrendingUp className="text-emerald-400" /> Data Analytics</h2></div><div className="bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-cyan-400 font-mono text-sm">Total Requests: <strong>{stats.total}</strong></div></div>
+            {loading ? <div className="text-center py-12 text-slate-500 font-mono">CALCULATING...</div> : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-emerald-950/30 rounded-xl p-5 border border-emerald-500/20"><h4 className="text-emerald-400 font-bold text-xs uppercase tracking-widest mb-2">Approval Rate</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-emerald-400 font-mono">{approvalRate}%</span></div></div>
+                <div className="bg-blue-950/30 rounded-xl p-5 border border-blue-500/20"><h4 className="text-blue-400 font-bold text-xs uppercase tracking-widest mb-2">Completed</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-blue-400 font-mono">{stats.approved}</span></div></div>
+                <div className="bg-amber-950/30 rounded-xl p-5 border border-amber-500/20"><h4 className="text-amber-400 font-bold text-xs uppercase tracking-widest mb-2">Pending</h4><div className="flex items-end gap-2"><span className="text-4xl font-bold text-amber-400 font-mono">{stats.pending}</span></div></div>
+                <div className="md:col-span-2 bg-slate-950/50 rounded-xl border border-slate-800 p-5"><h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><PieChart size={16} className="text-purple-400" /> Requests by Department</h3><div className="space-y-4">{Object.entries(stats.deptCounts).sort(([,a], [,b]) => b - a).map(([dept, count]) => { const percentage = (count / stats.total) * 100; return (<div key={dept}><div className="flex justify-between text-xs mb-2 font-mono"><span className="text-slate-400">{dept}</span><span className="text-cyan-400">{count}</span></div><div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden"><div className="bg-purple-500 h-2 rounded-full" style={{ width: `${percentage}%` }}></div></div></div>); })}</div></div>
+              </div>
+            )}
         </div>
     );
   }
 
   function InventoryManager({ inventory, setInventory }) {
-    // --- STATE MANAGEMENT ---
     const [isEditing, setIsEditing] = useState(false);
-    const [localInventory, setLocalInventory] = useState(inventory);
+    const [localInventory, setLocalInventory] = useState(inventory || DEFAULT_INVENTORY);
     const [isDirty, setIsDirty] = useState(false);
     const [saving, setSaving] = useState(false);
-
-    // --- FORM STATE ---
     const [newItemName, setNewItemName] = useState('');
     const [newItemCount, setNewItemCount] = useState(1);
     const [newItemCategory, setNewItemCategory] = useState('film');
     const [newItemTraining, setNewItemTraining] = useState(false);
 
-    // Sync local state when global inventory changes
-    useEffect(() => {
-        if (!isEditing) {
-            setLocalInventory(inventory);
-        }
-    }, [inventory, isEditing]);
+    useEffect(() => { if (!isEditing && inventory) setLocalInventory(inventory); }, [inventory, isEditing]);
 
-    // --- ACTIONS ---
     const toggleEditMode = () => {
-        if (isEditing && isDirty) {
-            if (!window.confirm("You have unsaved changes. Discard them?")) return;
-        }
+        if (isEditing && isDirty && !window.confirm("You have unsaved changes. Discard them?")) return;
         setLocalInventory(inventory); 
         setIsEditing(!isEditing);
         setIsDirty(false);
     };
 
     const handleChange = (name, field, value) => {
-        setLocalInventory(prev => ({
-            ...prev,
-            [name]: { ...prev[name], [field]: value }
-        }));
+        setLocalInventory(prev => ({ ...prev, [name]: { ...prev[name], [field]: value } }));
         setIsDirty(true);
     };
 
     const handleDelete = (name) => {
-        if (window.confirm(`Permanently remove "${name}" from the database?`)) {
+        if (window.confirm(`Permanently remove "${name}"?`)) {
             const updated = { ...localInventory };
             delete updated[name];
             setLocalInventory(updated);
@@ -678,48 +655,21 @@ const App = () => {
 
     const handleAddItem = (e) => {
         e.preventDefault();
-        if (!newItemName.trim()) return;
-        
-        const name = newItemName.trim();
-        if (localInventory[name]) {
-            alert("An item with this name already exists.");
-            return;
-        }
-
-        setLocalInventory(prev => ({
-            ...prev,
-            [name]: { 
-                count: parseInt(newItemCount) || 0, 
-                category: newItemCategory, 
-                requiresTraining: newItemTraining 
-            }
-        }));
-        
-        setNewItemName('');
-        setNewItemCount(1);
-        setIsDirty(true);
+        if (!newItemName.trim() || localInventory[newItemName.trim()]) return alert("Invalid or duplicate name.");
+        setLocalInventory(prev => ({ ...prev, [newItemName.trim()]: { count: parseInt(newItemCount) || 0, category: newItemCategory, requiresTraining: newItemTraining } }));
+        setNewItemName(''); setNewItemCount(1); setIsDirty(true);
     };
 
     const handleSave = async () => {
-        if (!window.confirm("Are you sure you want to commit these changes to the live system?")) return;
-        
+        if (!window.confirm("Commit changes to live system?")) return;
         setSaving(true);
         try {
             await setDoc(doc(db, "settings", "inventory_v2"), localInventory);
-            setInventory(localInventory); 
-            setIsEditing(false);
-            setIsDirty(false);
-            alert("✅ Inventory Database Updated Successfully");
-        } catch (error) {
-            console.error("Save failed:", error);
-            alert("❌ Error: Could not save changes.");
-        } finally {
-            setSaving(false);
-        }
+            setInventory(localInventory); setIsEditing(false); setIsDirty(false);
+            alert("✅ Updated Successfully");
+        } catch (error) { console.error(error); alert("❌ Save failed."); } finally { setSaving(false); }
     };
 
-    // --- GROUPING LOGIC (Fixed Order) ---
-    // This ensures distinct sections always appear in this specific order
     const SECTIONS = [
         { id: 'film', label: 'Film & TV Equipment', icon: Video, color: 'text-cyan-400', border: 'border-cyan-500/30', bg: 'bg-cyan-950/20' },
         { id: 'photo', label: 'Photography Gear', icon: Camera, color: 'text-pink-400', border: 'border-pink-500/30', bg: 'bg-pink-950/20' },
@@ -727,7 +677,7 @@ const App = () => {
         { id: 'general', label: 'General Stock', icon: Box, color: 'text-slate-400', border: 'border-slate-700', bg: 'bg-slate-900/50' }
     ];
 
-    const getGroupedInventory = () => {
+    const groupedData = (() => {
         const grouped = { film: [], photo: [], culinary: [], general: [] };
         Object.entries(localInventory).forEach(([name, data]) => {
             const cat = data.category || 'general';
@@ -735,145 +685,18 @@ const App = () => {
             else grouped['general'].push({ name, ...data });
         });
         return grouped;
-    };
-
-    const groupedData = getGroupedInventory();
+    })();
 
     return (
       <div className={`bg-slate-900/80 backdrop-blur-xl rounded-2xl border overflow-hidden shadow-2xl transition-colors duration-300 ${isEditing ? 'border-indigo-500/30' : 'border-slate-800'}`}>
-        
-        {/* --- HEADER --- */}
         <div className={`p-6 border-b flex flex-col sm:flex-row justify-between items-center gap-4 transition-colors ${isEditing ? 'bg-indigo-950/20 border-indigo-500/30' : 'bg-slate-950/50 border-slate-800'}`}>
-            <div>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                    <Settings className={isEditing ? "text-indigo-400" : "text-amber-400"} /> 
-                    Inventory Master List
-                </h2>
-                <p className={`text-sm transition-colors ${isEditing ? 'text-indigo-300' : 'text-slate-400'}`}>
-                    {isEditing ? "EDIT MODE ACTIVE: Review changes before saving." : "View-only mode. Authenticated admins may edit."}
-                </p>
-            </div>
-            
+            <div><h2 className="text-xl font-bold text-white flex items-center gap-2"><Settings className={isEditing ? "text-indigo-400" : "text-amber-400"} /> Inventory Master List</h2><p className={`text-sm ${isEditing ? 'text-indigo-300' : 'text-slate-400'}`}>{isEditing ? "EDIT MODE ACTIVE" : "View-only mode."}</p></div>
             <div className="flex gap-3">
-                {isEditing ? (
-                    <>
-                        <button onClick={toggleEditMode} className="px-4 py-2 rounded-lg font-medium text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent hover:border-slate-600 transition-all">
-                            Cancel
-                        </button>
-                        <button 
-                            onClick={handleSave} 
-                            disabled={!isDirty || saving}
-                            className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all ${!isDirty ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' : 'bg-green-600 hover:bg-green-500 text-white'}`}
-                        >
-                            {saving ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
-                            Save Changes
-                        </button>
-                    </>
-                ) : (
-                    <button onClick={toggleEditMode} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg hover:shadow-indigo-500/20 transition-all">
-                        <Edit2 size={18} /> Edit Inventory
-                    </button>
-                )}
+                {isEditing ? (<><button onClick={toggleEditMode} className="px-4 py-2 rounded-lg font-medium text-slate-400 hover:text-white border border-transparent hover:border-slate-600">Cancel</button><button onClick={handleSave} disabled={!isDirty || saving} className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg ${!isDirty ? 'bg-slate-800 text-slate-500' : 'bg-green-600 text-white'}`}>{saving ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />} Save Changes</button></>) : (<button onClick={toggleEditMode} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg"><Edit2 size={18} /> Edit Inventory</button>)}
             </div>
         </div>
-        
-        {/* --- ADD NEW ITEM FORM (Only visible in Edit Mode) --- */}
-        {isEditing && (
-            <div className="p-6 bg-slate-900/50 border-b border-indigo-500/20 animate-fade-in">
-                <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
-                    <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Plus size={14}/> Add New Asset</h3>
-                    <form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end">
-                        <div className="flex-1 w-full">
-                            <label className="block text-xs text-slate-500 mb-1 ml-1">Asset Name</label>
-                            <input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none transition-all" placeholder="e.g. GoPro Hero 11 Black" />
-                        </div>
-                        <div className="w-24">
-                            <label className="block text-xs text-slate-500 mb-1 ml-1">Qty</label>
-                            <input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all" />
-                        </div>
-                        <div className="w-40">
-                            <label className="block text-xs text-slate-500 mb-1 ml-1">Category</label>
-                            <select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all">
-                                <option value="film">Film & TV</option>
-                                <option value="photo">Photography</option>
-                                <option value="culinary">Culinary Arts</option>
-                                <option value="general">General Stock</option>
-                            </select>
-                        </div>
-                        <div className="flex items-center gap-2 pb-3 px-2">
-                            <input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded bg-slate-950 border-slate-600 accent-indigo-500 cursor-pointer" />
-                            <label className="text-xs text-slate-400 cursor-pointer" onClick={() => setNewItemTraining(!newItemTraining)}>Training Req.</label>
-                        </div>
-                        <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-lg transition-all shadow-lg hover:shadow-indigo-500/20"><Plus size={20} /></button>
-                    </form>
-                </div>
-            </div>
-        )}
-
-        {/* --- INVENTORY LIST (SEPARATED SECTIONS) --- */}
-        <div className="p-6 space-y-8">
-            {SECTIONS.map((section) => {
-                const items = groupedData[section.id];
-                if (!items || items.length === 0) return null;
-
-                return (
-                    <div key={section.id} className="animate-fade-in">
-                        {/* Section Header */}
-                        <div className={`flex items-center gap-3 mb-4 pb-2 border-b ${section.border}`}>
-                            <div className={`p-2 rounded-lg ${section.bg} ${section.color}`}>
-                                <section.icon size={20} />
-                            </div>
-                            <h3 className={`text-lg font-bold ${section.color}`}>{section.label}</h3>
-                        </div>
-
-                        {/* Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {items.sort((a, b) => a.name.localeCompare(b.name)).map((item) => (
-                                <div key={item.name} className={`group relative p-3 rounded-xl border transition-all duration-300 ${isEditing ? 'bg-slate-900 border-indigo-900/30' : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'}`}>
-                                    <div className="flex justify-between items-center h-full">
-                                        
-                                        {/* Left Side: Name & Training Flag */}
-                                        <div className="flex-1 mr-4 min-w-0">
-                                            <div className="font-medium text-slate-200 text-sm truncate" title={item.name}>{item.name}</div>
-                                            
-                                            {isEditing ? (
-                                                <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer w-fit p-1 -ml-1 rounded hover:bg-slate-800 transition-colors">
-                                                    <input type="checkbox" checked={item.requiresTraining} onChange={(e) => handleChange(item.name, 'requiresTraining', e.target.checked)} className="rounded border-slate-600 bg-slate-800 accent-red-500 w-3 h-3" />
-                                                    <span className={`text-[10px] uppercase font-bold tracking-wide ${item.requiresTraining ? 'text-red-400' : 'text-slate-600'}`}>Training Required</span>
-                                                </label>
-                                            ) : (
-                                                item.requiresTraining && <div className="mt-1"><span className="text-[10px] font-bold text-red-400 bg-red-950/30 border border-red-900/50 px-2 py-0.5 rounded-full inline-flex items-center gap-1"><AlertCircle size={8} /> TRAINING REQ</span></div>
-                                            )}
-                                        </div>
-
-                                        {/* Right Side: Quantity & Delete */}
-                                        <div className="flex items-center gap-3">
-                                            {isEditing ? (
-                                                <>
-                                                    <div className="flex items-center bg-slate-950 rounded-lg border border-slate-700 overflow-hidden">
-                                                        <button onClick={() => handleChange(item.name, 'count', Math.max(0, item.count - 1))} className="px-2 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors bg-slate-900 border-r border-slate-800 active:bg-slate-700">-</button>
-                                                        <input type="number" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value) || 0)} className="w-12 text-center bg-transparent text-sm font-mono text-white focus:outline-none appearance-none font-bold" />
-                                                        <button onClick={() => handleChange(item.name, 'count', item.count + 1)} className="px-2 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors bg-slate-900 border-l border-slate-800 active:bg-slate-700">+</button>
-                                                    </div>
-                                                    <button onClick={() => handleDelete(item.name)} className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg border border-transparent hover:border-red-900/30 transition-all" title="Delete Asset">
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <div className="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex flex-col items-center min-w-[50px]">
-                                                    <span className={`text-sm font-mono font-bold ${item.count === 0 ? 'text-red-500' : 'text-cyan-400'}`}>{item.count}</span>
-                                                    <span className="text-[9px] text-slate-600 uppercase font-bold tracking-wider">Stock</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
+        {isEditing && (<div className="p-6 bg-slate-900/50 border-b border-indigo-500/20"><div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50"><form onSubmit={handleAddItem} className="flex flex-col md:flex-row gap-4 items-end"><div className="flex-1 w-full"><label className="block text-xs text-slate-500 mb-1 ml-1">Asset Name</label><input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 outline-none" placeholder="New Item Name" /></div><div className="w-24"><label className="block text-xs text-slate-500 mb-1 ml-1">Qty</label><input type="number" min="0" value={newItemCount} onChange={e => setNewItemCount(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 outline-none" /></div><div className="w-40"><label className="block text-xs text-slate-500 mb-1 ml-1">Category</label><select value={newItemCategory} onChange={e => setNewItemCategory(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 outline-none"><option value="film">Film & TV</option><option value="photo">Photography</option><option value="culinary">Culinary</option><option value="general">General</option></select></div><div className="flex items-center gap-2 pb-3 px-2"><input type="checkbox" checked={newItemTraining} onChange={e => setNewItemTraining(e.target.checked)} className="w-4 h-4 rounded bg-slate-950 border-slate-600 accent-indigo-500" /><label className="text-xs text-slate-400">Training?</label></div><button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-lg shadow-lg"><Plus size={20} /></button></form></div></div>)}
+        <div className="p-6 space-y-8">{SECTIONS.map((section) => { const items = groupedData[section.id]; if (!items || items.length === 0) return null; return (<div key={section.id} className="animate-fade-in"><div className={`flex items-center gap-3 mb-4 pb-2 border-b ${section.border}`}><div className={`p-2 rounded-lg ${section.bg} ${section.color}`}><section.icon size={20} /></div><h3 className={`text-lg font-bold ${section.color}`}>{section.label}</h3></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{items.sort((a, b) => a.name.localeCompare(b.name)).map((item) => (<div key={item.name} className={`group relative p-3 rounded-xl border transition-all ${isEditing ? 'bg-slate-900 border-indigo-900/30' : 'bg-slate-950/40 border-slate-800'}`}><div className="flex justify-between items-center h-full"><div className="flex-1 mr-4 min-w-0"><div className="font-medium text-slate-200 text-sm truncate">{item.name}</div>{isEditing ? (<label className="flex items-center gap-1.5 mt-1.5 cursor-pointer w-fit p-1 -ml-1 rounded hover:bg-slate-800"><input type="checkbox" checked={item.requiresTraining} onChange={(e) => handleChange(item.name, 'requiresTraining', e.target.checked)} className="rounded border-slate-600 bg-slate-800 accent-red-500 w-3 h-3"/><span className={`text-[10px] uppercase font-bold tracking-wide ${item.requiresTraining ? 'text-red-400' : 'text-slate-600'}`}>Training Required</span></label>) : (item.requiresTraining && <div className="mt-1"><span className="text-[10px] font-bold text-red-400 bg-red-950/30 border border-red-900/50 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"><AlertCircle size={8} /> TRAINING REQ</span></div>)}</div><div className="flex items-center gap-3">{isEditing ? (<><div className="flex items-center bg-slate-950 rounded-lg border border-slate-700 overflow-hidden"><button onClick={() => handleChange(item.name, 'count', Math.max(0, item.count - 1))} className="px-2 py-1.5 text-slate-400 hover:text-white border-r border-slate-800">-</button><input type="number" value={item.count} onChange={(e) => handleChange(item.name, 'count', parseInt(e.target.value) || 0)} className="w-12 text-center bg-transparent text-sm font-mono text-white focus:outline-none appearance-none font-bold"/><button onClick={() => handleChange(item.name, 'count', item.count + 1)} className="px-2 py-1.5 text-slate-400 hover:text-white border-l border-slate-800">+</button></div><button onClick={() => handleDelete(item.name)} className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg"><Trash2 size={16} /></button></>) : (<div className="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg flex flex-col items-center min-w-[50px]"><span className={`text-sm font-mono font-bold ${item.count === 0 ? 'text-red-500' : 'text-cyan-400'}`}>{item.count}</span><span className="text-[9px] text-slate-600 uppercase font-bold tracking-wider">Stock</span></div>)}</div></div></div>))}</div></div>); })}</div>
       </div>
     );
   }
@@ -885,35 +708,25 @@ const App = () => {
                  <div className="p-4 bg-cyan-900/20 border border-cyan-500/30 rounded-lg text-sm text-cyan-200">
                     <p>Encountered a bug or have a feature request? Let the development team know directly.</p>
                  </div>
-                 <div>
-                    <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Message Type</label>
-                    <select name="feedbackType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none">
-                        <option>Bug Report</option>
-                        <option>Feature Request</option>
-                        <option>General Inquiry</option>
-                    </select>
-                 </div>
-                 <div>
-                    <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Details</label>
-                    <textarea name="details" rows={5} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe the issue..." required></textarea>
-                 </div>
+                 <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Message Type</label><select name="feedbackType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Bug Report</option><option>Feature Request</option><option>General Inquiry</option></select></div>
+                 <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Details</label><textarea name="details" rows={5} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe the issue..." required></textarea></div>
              </div>
           </FormContainer>
       );
   }
 
   function InventorySelector({ inventory, category }) {
-      const filteredItems = Object.entries(inventory).filter(([_, item]) => item.category === category);
+      // *** WHITE SCREEN FIX #1: Guard Clause ***
+      if (!inventory) return <div className="p-4 text-xs text-slate-500 border border-slate-800 rounded bg-slate-950/50">Inventory data initializing...</div>;
+      const filteredItems = Object.entries(inventory).filter(([_, item]) => item?.category === category);
+      if (filteredItems.length === 0) return <div className="p-4 text-xs text-slate-500">No items available in this category.</div>;
       return (
           <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800 mt-4">
               <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 border-b border-slate-800 pb-2">Equipment Request</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {filteredItems.map(([name, item]) => (
                       <div key={name} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded hover:border-slate-600 transition-colors">
-                          <div className="flex flex-col">
-                              <span className="text-sm text-slate-200 font-medium">{name}</span>
-                              {item.requiresTraining && <span className="text-[10px] text-amber-500 flex items-center gap-1"><AlertCircle size={10} /> Training Req.</span>}
-                          </div>
+                          <div className="flex flex-col"><span className="text-sm text-slate-200 font-medium">{name}</span>{item.requiresTraining && <span className="text-[10px] text-amber-500 flex items-center gap-1"><AlertCircle size={10} /> Training Req.</span>}</div>
                           <input type="number" name={`gear_${name}`} min="0" max="5" placeholder="0" className="w-12 bg-slate-950 border border-slate-700 rounded p-1 text-center text-white text-sm focus:border-cyan-500 outline-none" />
                       </div>
                   ))}
@@ -926,13 +739,9 @@ const App = () => {
       return (
           <FormContainer title="Film & TV" icon={Video} colorClass="bg-cyan-400" {...props}>
               <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div></div>
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Shoot Location</label><input type="text" name="location" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Gym, Field, Off-campus" required /></div>
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Details</label><textarea name="details" rows={3} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe the shoot..." required /></div>
-                  
                   <InventorySelector inventory={props.inventory} category="film" />
               </div>
           </FormContainer>
@@ -943,12 +752,8 @@ const App = () => {
       return (
           <FormContainer title="Photography" icon={Camera} colorClass="bg-pink-400" {...props}>
                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div></div>
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event / Subject</label><input type="text" name="eventSubject" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Senior Portraits" required /></div>
-                  
                   <InventorySelector inventory={props.inventory} category="photo" />
               </div>
           </FormContainer>
@@ -959,10 +764,7 @@ const App = () => {
       return (
           <FormContainer title="Graphic Design" icon={PenTool} colorClass="bg-fuchsia-400" {...props}>
               <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Deadline</label><input type="date" name="deadline" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Format</label><select name="format" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Digital (Social Media/Web)</option><option>Print (Poster/Flyer)</option><option>Apparel</option><option>Logo / Branding</option></select></div>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Deadline</label><input type="date" name="deadline" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Format</label><select name="format" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Digital (Social Media/Web)</option><option>Print (Poster/Flyer)</option><option>Apparel</option><option>Logo / Branding</option></select></div></div>
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Design Brief</label><textarea name="brief" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe colors, style, text required..." required /></div>
               </div>
           </FormContainer>
@@ -973,10 +775,7 @@ const App = () => {
       return (
           <FormContainer title="Business & Startup" icon={Briefcase} colorClass="bg-emerald-400" {...props}>
               <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Meeting Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Service Type</label><select name="serviceType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Consultation</option><option>Business Plan Review</option><option>Marketing Strategy</option><option>Pitch Deck Prep</option></select></div>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Meeting Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Service Type</label><select name="serviceType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Consultation</option><option>Business Plan Review</option><option>Marketing Strategy</option><option>Pitch Deck Prep</option></select></div></div>
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Objective</label><textarea name="objective" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="What are your goals?" required /></div>
               </div>
           </FormContainer>
@@ -987,10 +786,7 @@ const App = () => {
       return (
           <FormContainer title="Culinary Arts" icon={Utensils} colorClass="bg-amber-400" {...props}>
               <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Headcount</label><input type="number" name="headcount" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. 50" required /></div>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Headcount</label><input type="number" name="headcount" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. 50" required /></div></div>
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Menu Requirements</label><textarea name="menu" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Dietary restrictions, food preferences..." required /></div>
               </div>
           </FormContainer>
