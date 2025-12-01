@@ -735,27 +735,125 @@ const App = () => {
       );
   }
 
-  function FilmForm(props) {
+function FilmForm(props) {
+      const [requestType, setRequestType] = useState('checkout'); // 'checkout' or 'event'
+
       return (
           <FormContainer title="Film & TV" icon={Video} colorClass="bg-cyan-400" {...props}>
-              <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div></div>
-                  <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Shoot Location</label><input type="text" name="location" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Gym, Field, Off-campus" required /></div>
-                  <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Details</label><textarea name="details" rows={3} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe the shoot..." required /></div>
-                  <InventorySelector inventory={props.inventory} category="film" />
+              {/* --- TYPE TOGGLE --- */}
+              <div className="flex gap-4 mb-6 p-1 bg-slate-950 rounded-lg border border-slate-800">
+                  <button 
+                      type="button" 
+                      onClick={() => setRequestType('checkout')}
+                      className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'checkout' ? 'bg-slate-800 text-cyan-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                      <Box size={16} /> Equipment Checkout
+                  </button>
+                  <button 
+                      type="button" 
+                      onClick={() => setRequestType('event')}
+                      className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'event' ? 'bg-slate-800 text-cyan-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                      <MonitorPlay size={16} /> Event Coverage
+                  </button>
               </div>
+
+              {/* --- HIDDEN FIELD FOR DATABASE --- */}
+              <input type="hidden" name="requestType" value={requestType} />
+
+              {/* --- CHECKOUT MODE --- */}
+              {requestType === 'checkout' && (
+                  <div className="space-y-4 animate-fade-in">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                      </div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project/Shoot Location</label><input type="text" name="location" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Gym, Field, Off-campus" required /></div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Details</label><textarea name="details" rows={3} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe the shoot..." required /></div>
+                      
+                      <InventorySelector inventory={props.inventory} category="film" />
+                  </div>
+              )}
+
+              {/* --- EVENT COVERAGE MODE --- */}
+              {requestType === 'event' && (
+                  <div className="space-y-4 animate-fade-in">
+                      <div className="p-4 bg-cyan-950/30 border border-cyan-500/30 rounded-lg text-xs text-cyan-200 mb-4">
+                          Requesting the Film crew to record or livestream a school event.
+                      </div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Name</label><input type="text" name="eventName" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Varsity Football vs. Walden Grove" required /></div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Start Time</label><input type="time" name="startTime" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Coverage Type</label>
+                          <select name="coverageType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none">
+                              <option>Live Stream (Broadcast)</option>
+                              <option>Recording (Raw Footage)</option>
+                              <option>Highlight Reel (Edited)</option>
+                          </select>
+                      </div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Location / Details</label><textarea name="details" rows={3} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Specific shots needed? Location details?" required /></div>
+                  </div>
+              )}
           </FormContainer>
       );
   }
 
   function PhotoForm(props) {
+      const [requestType, setRequestType] = useState('service'); // Default to service/event for photo
+
       return (
           <FormContainer title="Photography" icon={Camera} colorClass="bg-pink-400" {...props}>
-               <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div></div>
-                  <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event / Subject</label><input type="text" name="eventSubject" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Senior Portraits" required /></div>
-                  <InventorySelector inventory={props.inventory} category="photo" />
+               {/* --- TYPE TOGGLE --- */}
+               <div className="flex gap-4 mb-6 p-1 bg-slate-950 rounded-lg border border-slate-800">
+                  <button 
+                      type="button" 
+                      onClick={() => setRequestType('service')}
+                      className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'service' ? 'bg-slate-800 text-pink-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                      <Users size={16} /> Event Coverage
+                  </button>
+                  <button 
+                      type="button" 
+                      onClick={() => setRequestType('checkout')}
+                      className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'checkout' ? 'bg-slate-800 text-pink-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                      <Box size={16} /> Equipment Checkout
+                  </button>
               </div>
+
+              <input type="hidden" name="requestType" value={requestType} />
+
+               {/* --- CHECKOUT MODE --- */}
+               {requestType === 'checkout' && (
+                   <div className="space-y-4 animate-fade-in">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                      </div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Subject</label><input type="text" name="projectSubject" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Senior Portraits" required /></div>
+                      
+                      <InventorySelector inventory={props.inventory} category="photo" />
+                  </div>
+               )}
+
+               {/* --- EVENT MODE --- */}
+               {requestType === 'service' && (
+                   <div className="space-y-4 animate-fade-in">
+                      <div className="p-4 bg-pink-950/30 border border-pink-500/30 rounded-lg text-xs text-pink-200 mb-4">
+                          Request a photographer to cover a specific school event.
+                      </div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Name</label><input type="text" name="eventName" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Homecoming Assembly" required /></div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Start Time</label><input type="time" name="startTime" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                      </div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Location</label><input type="text" name="location" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Courtyard" required /></div>
+                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Shot List / Needs</label><textarea name="details" rows={3} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="List specific people or moments to capture..." required /></div>
+                   </div>
+               )}
           </FormContainer>
       );
   }
@@ -807,7 +905,7 @@ const App = () => {
           <div className="max-w-3xl mx-auto bg-black border-4 border-slate-700 rounded-xl overflow-hidden font-mono shadow-2xl relative animate-fade-in select-none"><div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]"></div><div className="bg-slate-900 p-4 border-b-4 border-slate-700 flex justify-between items-center relative z-20"><div className="text-green-400 text-xs flex items-center gap-2"><Gamepad2 size={14}/> LANCER_RUN.EXE</div><div className="text-yellow-400 text-xs flex items-center gap-2"><Trophy size={14}/> HI-SCORE: {highScore}</div><button onClick={onExit} className="text-red-500 hover:text-red-400 text-xs uppercase font-bold">[ EXIT SYSTEM ]</button></div><div className="relative bg-slate-950" style={{ height: '300px' }}><canvas ref={canvasRef} width={700} height={300} className="w-full h-full block"/>{gameState === 'start' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-20"><h2 className="text-4xl font-bold text-cyan-400 mb-4 tracking-widest glitch-text">LANCER RUN</h2><p className="text-slate-300 text-sm mb-6">Space/Up to Jump. Avoid the F's!</p><button onClick={startGame} className="px-6 py-2 bg-green-600 hover:bg-green-500 text-black font-bold rounded blink-anim">INSERT COIN (START)</button></div>)}{gameState === 'gameover' && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/40 z-20 backdrop-blur-sm"><h2 className="text-4xl font-bold text-red-500 mb-2">CRITICAL FAILURE</h2><p className="text-white text-xl mb-6">FINAL SCORE: {score}</p><button onClick={startGame} className="px-6 py-2 bg-white text-black font-bold rounded hover:bg-slate-200">RETRY MISSION</button></div>)}</div></div>
       );
   }
-// *** PASTE THIS MISSING COMPONENT AT THE BOTTOM OF YOUR FILE ***
+
   function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser, blackouts = [] }) { 
       const formRef = useRef(null);
       const draftKey = getDraftKey(title);
