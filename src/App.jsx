@@ -6,7 +6,7 @@ import {
   AlertTriangle, History, LogIn, BarChart3, TrendingUp, PieChart, Settings, 
   RefreshCw, ChevronLeft, ChevronRight, Download, Search, Ban, Cpu, Zap, 
   FileX, ShieldCheck, Plus, Trash2, Edit2, MessageSquare, Bug, Lightbulb, 
-  CheckSquare, Gamepad2, Trophy 
+  CheckSquare, Gamepad2, Trophy, CornerDownLeft 
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
@@ -402,9 +402,10 @@ const App = () => {
       );
   }
 
-  function MyRequestsView({ currentUser }) {
+function MyRequestsView({ currentUser }) {
     const [myRequests, setMyRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+
     useEffect(() => {
         if (!currentUser) return;
         const q = query(collection(db, "requests"), where("email", "==", currentUser.email), orderBy("createdAt", "desc"));
@@ -415,11 +416,38 @@ const App = () => {
         });
         return () => unsubscribe();
     }, [currentUser]);
+
     const handleCancel = async (id) => { if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "requests", id)); };
+
+    // *** NEW: STUDENT RETURN LOGIC ***
+    const handleReturn = async (id) => {
+        const condition = prompt("Optional: Any damage or issues to report? (Leave empty if good)");
+        if (condition === null) return; // User clicked Cancel
+
+        try {
+            await updateDoc(doc(db, "requests", id), {
+                status: 'Returned',
+                returnedAt: new Date(),
+                conditionReport: condition || 'Good'
+            });
+            alert("Success: Item marked as returned. Pending Admin verification.");
+        } catch (error) {
+            console.error(error);
+            alert("Error updating status.");
+        }
+    };
+
     const getStatusBadge = (status) => {
-        const styles = { 'Approved': 'bg-green-950/50 text-green-400 border-green-500/30', 'Denied': 'bg-red-950/50 text-red-400 border-red-500/30', 'Completed': 'bg-slate-800 text-slate-400 border-slate-700', 'default': 'bg-amber-950/50 text-amber-400 border-amber-500/30' };
+        const styles = { 
+            'Approved': 'bg-green-950/50 text-green-400 border-green-500/30', 
+            'Denied': 'bg-red-950/50 text-red-400 border-red-500/30', 
+            'Completed': 'bg-slate-800 text-slate-400 border-slate-700', 
+            'Returned': 'bg-blue-950/50 text-blue-400 border-blue-500/30', // New Style
+            'default': 'bg-amber-950/50 text-amber-400 border-amber-500/30' 
+        };
         return <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${styles[status] || styles['default']}`}>{status}</span>;
     };
+
     return (
         <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
             <div className="bg-slate-950/50 border-b border-slate-800 p-6"><h2 className="text-xl font-bold text-white flex items-center gap-2"><History className="text-cyan-400" /> My Request History</h2></div>
@@ -428,7 +456,22 @@ const App = () => {
                     <table className="w-full text-left border-collapse min-w-[700px]">
                         <thead><tr className="bg-slate-800/50 border-b border-slate-700 text-xs uppercase text-slate-400 font-mono"><th className="p-4">Ref ID</th><th className="p-4">Dept</th><th className="p-4">Project</th><th className="p-4">Date Submitted</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
                         <tbody className="divide-y divide-slate-800">{myRequests.map((req) => (
-                            <tr key={req.id} className="hover:bg-slate-800/50 transition-colors"><td className="p-4 text-cyan-400 font-mono text-xs">{req.displayId}</td><td className="p-4 text-slate-300 text-sm capitalize">{req.dept}</td><td className="p-4 font-semibold text-white text-sm">{req.title}</td><td className="p-4 text-slate-400 text-sm font-mono">{req.formattedDate}</td><td className="p-4">{getStatusBadge(req.status)}</td><td className="p-4">{req.status === 'Pending Review' && <button onClick={() => handleCancel(req.id)} className="text-xs text-red-400 border border-red-900 hover:bg-red-950/50 px-3 py-1 rounded transition-colors">Cancel</button>}</td></tr>
+                            <tr key={req.id} className="hover:bg-slate-800/50 transition-colors">
+                                <td className="p-4 text-cyan-400 font-mono text-xs">{req.displayId}</td>
+                                <td className="p-4 text-slate-300 text-sm capitalize">{req.dept}</td>
+                                <td className="p-4 font-semibold text-white text-sm">{req.title}</td>
+                                <td className="p-4 text-slate-400 text-sm font-mono">{req.formattedDate}</td>
+                                <td className="p-4">{getStatusBadge(req.status)}</td>
+                                <td className="p-4">
+                                    {req.status === 'Pending Review' && <button onClick={() => handleCancel(req.id)} className="text-xs text-red-400 border border-red-900 hover:bg-red-950/50 px-3 py-1 rounded transition-colors">Cancel</button>}
+                                    {/* NEW CHECK-IN BUTTON */}
+                                    {req.status === 'Approved' && (
+                                        <button onClick={() => handleReturn(req.id)} className="text-xs font-bold text-blue-400 border border-blue-900 bg-blue-950/30 hover:bg-blue-900/50 px-3 py-1 rounded transition-colors flex items-center gap-1">
+                                            <CornerDownLeft size={12} /> Check In
+                                        </button>
+                                    )}
+                                </td>
+                            </tr>
                         ))}</tbody>
                     </table>
                 )}
@@ -497,29 +540,49 @@ const App = () => {
     );
   }
 
-  function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
+function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
     const [requests, setRequests] = useState([]);
     const [filter, setFilter] = useState('all');
     const [loading, setLoading] = useState(true);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+
     useEffect(() => { const q = query(collection(db, "requests"), orderBy("createdAt", "desc")); const unsubscribe = onSnapshot(q, (snapshot) => { const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: formatDateSafe(doc.data().createdAt) })); setRequests(reqs); setLoading(false); }); return () => unsubscribe(); }, []);
-    const handleStatusUpdate = async (req, newStatus) => { if (!window.confirm(`Confirm status change to: ${newStatus}?`)) return; await updateDoc(doc(db, "requests", req.id), { status: newStatus }); if (selectedRequest && selectedRequest.id === req.id) setSelectedRequest(prev => ({...prev, status: newStatus})); sendNotificationEmail({ to_name: req.fullName, to_email: req.email, subject: `Request Update: ${req.title}`, title: req.title, status: newStatus, message: `Status updated to ${newStatus}.` }); };
+    
+    const handleStatusUpdate = async (req, newStatus) => { 
+        if (!window.confirm(`Confirm status change to: ${newStatus}?`)) return; 
+        
+        await updateDoc(doc(db, "requests", req.id), { status: newStatus }); 
+        
+        // If viewing details, update the modal locally
+        if (selectedRequest && selectedRequest.id === req.id) setSelectedRequest(prev => ({...prev, status: newStatus})); 
+        
+        // Only send email if it's NOT a completion (to avoid spamming on return)
+        if (newStatus !== 'Completed') {
+            sendNotificationEmail({ to_name: req.fullName, to_email: req.email, subject: `Request Update: ${req.title}`, title: req.title, status: newStatus, message: `Status updated to ${newStatus}.` }); 
+        }
+    };
+
     const handleDelete = async (id) => { if(window.confirm("Delete this record permanently?")) { await deleteDoc(doc(db, "requests", id)); if (selectedRequest && selectedRequest.id === id) setSelectedRequest(null); } };
+    
     const downloadCSV = () => { const headers = ["ID", "Department", "Title", "User", "Email", "Date Submitted", "Status", "Details"]; const rows = requests.map(row => [row.displayId, row.dept, `"${row.title}"`, row.fullName, row.email, row.formattedDate, row.status, `"${(row.details || row.brief || row.description || '').replace(/"/g, '""')}"` ]); const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n'); const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "cte_requests_export.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
     
     const filteredRequests = requests.filter(r => {
         const matchesDept = filter === 'all' ? true : r.dept?.toLowerCase().includes(filter.toLowerCase());
         const searchLower = searchTerm.toLowerCase();
-        const matchesSearch = 
-            (r.title && r.title.toLowerCase().includes(searchLower)) || 
-            (r.fullName && r.fullName.toLowerCase().includes(searchLower)) || 
-            (r.displayId && r.displayId.toLowerCase().includes(searchLower)) ||
-            (r.email && r.email.toLowerCase().includes(searchLower));
+        const matchesSearch = r.title?.toLowerCase().includes(searchLower) || r.fullName?.toLowerCase().includes(searchLower) || r.displayId?.toLowerCase().includes(searchLower) || r.email?.toLowerCase().includes(searchLower);
         return matchesDept && matchesSearch;
     });
 
-    const getStatusColor = (status) => { switch(status) { case 'Approved': return 'bg-green-950/50 text-green-400 border-green-500/30'; case 'Denied': return 'bg-red-950/50 text-red-400 border-red-500/30'; case 'Completed': return 'bg-slate-800 text-slate-400 border-slate-700'; default: return 'bg-amber-950/50 text-amber-400 border-amber-500/30'; }};
+    const getStatusColor = (status) => { 
+        switch(status) { 
+            case 'Approved': return 'bg-green-950/50 text-green-400 border-green-500/30'; 
+            case 'Denied': return 'bg-red-950/50 text-red-400 border-red-500/30'; 
+            case 'Completed': return 'bg-slate-800 text-slate-400 border-slate-700'; 
+            case 'Returned': return 'bg-blue-900/50 text-blue-400 border-blue-500/30 animate-pulse'; // Highlight returns
+            default: return 'bg-amber-950/50 text-amber-400 border-amber-500/30'; 
+        }
+    };
 
     return (
       <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl relative">
@@ -531,6 +594,14 @@ const App = () => {
                 <button onClick={() => setSelectedRequest(null)} className="text-slate-400 hover:text-white hover:bg-slate-800 p-2 rounded-full transition-colors"><X size={20} /></button>
               </div>
               <div className="p-6 space-y-6">
+                 {/* --- NEW: Show Return Condition if available --- */}
+                 {selectedRequest.conditionReport && (
+                     <div className="bg-blue-950/30 border border-blue-500/30 p-4 rounded-lg">
+                         <h4 className="text-blue-400 text-xs font-bold uppercase mb-1">Student Return Report</h4>
+                         <p className="text-white text-sm">{selectedRequest.conditionReport}</p>
+                     </div>
+                 )}
+
                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
                     <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Sector</label><p className="font-semibold text-white capitalize">{selectedRequest.dept}</p></div>
                     <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Status</label><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${getStatusColor(selectedRequest.status)}`}>{selectedRequest.status}</span></div>
@@ -541,7 +612,7 @@ const App = () => {
                     <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><Briefcase size={16} className="text-cyan-500"/> Mission Details</h4>
                     <div className="bg-slate-950/50 rounded-lg p-4 space-y-4 border border-slate-800">
                       {Object.entries(selectedRequest).map(([key, value]) => {
-                        if(['id', 'dept', 'status', 'fullName', 'email', 'role', 'formattedDate', 'createdAt', 'title', 'requestName', 'displayId'].includes(key)) return null;
+                        if(['id', 'dept', 'status', 'fullName', 'email', 'role', 'formattedDate', 'createdAt', 'title', 'requestName', 'displayId', 'conditionReport', 'returnedAt'].includes(key)) return null;
                         if(Array.isArray(value)) return <div key={key}><label className="text-xs font-bold text-slate-500 uppercase block mb-1">{key}</label><ul className="list-disc list-inside text-sm text-slate-300 bg-slate-900 p-2 rounded border border-slate-800">{value.map((v,i)=><li key={i}>{v}</li>)}</ul></div>;
                         return <div key={key}><label className="text-xs font-bold text-slate-500 uppercase block mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}</label><p className="text-slate-300 text-sm whitespace-pre-wrap">{value}</p></div>
                       })}
@@ -552,6 +623,8 @@ const App = () => {
             </div>
           </div>
         )}
+        
+        {/* Header Section */}
         <div className="bg-slate-950/50 border-b border-slate-800 p-4 md:p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-white"><ClipboardList className="text-purple-400" /> Request Log</h2><p className="text-slate-400 text-sm">Live Database Feed</p></div>
           <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
@@ -562,6 +635,8 @@ const App = () => {
             </div>
           </div>
         </div>
+
+        {/* Table Section */}
         <div className="overflow-x-auto">
           {loading ? <div className="p-8 text-center text-slate-500 font-mono">INITIALIZING STREAM...</div> : (
             <table className="w-full text-left border-collapse min-w-[700px]">
@@ -574,7 +649,21 @@ const App = () => {
                     <td className="p-4 text-slate-400 text-sm">{req.fullName}</td>
                     <td className="p-4"><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${getStatusColor(req.status)}`}>{req.status}</span></td>
                     <td className="p-4"><button onClick={() => setSelectedRequest(req)} className="text-slate-500 hover:text-cyan-400 p-2 transition-colors"><Eye size={20} /></button></td>
-                    {adminMode && <td className="p-4 flex gap-2"><button onClick={() => handleStatusUpdate(req, 'Approved')} className="p-1 bg-green-900/20 text-green-500 rounded hover:bg-green-900/40"><Check size={16}/></button><button onClick={() => handleStatusUpdate(req, 'Denied')} className="p-1 bg-red-900/20 text-red-500 rounded hover:bg-red-900/40"><X size={16}/></button><button onClick={() => handleDelete(req.id)} className="p-1 bg-slate-800 text-slate-500 rounded hover:bg-slate-700"><span className="font-mono text-xs font-bold px-1">DEL</span></button></td>}
+                    
+                    {adminMode && <td className="p-4 flex gap-2">
+                        {/* SPECIAL LOGIC FOR RETURNED ITEMS */}
+                        {req.status === 'Returned' ? (
+                            <button onClick={() => handleStatusUpdate(req, 'Completed')} className="flex-1 bg-blue-900/30 text-blue-400 border border-blue-800 px-3 py-1 rounded text-xs font-bold hover:bg-blue-800 hover:text-white transition-colors">
+                                VERIFY & STOCK
+                            </button>
+                        ) : (
+                            <>
+                                <button onClick={() => handleStatusUpdate(req, 'Approved')} className="p-1 bg-green-900/20 text-green-500 rounded hover:bg-green-900/40"><Check size={16}/></button>
+                                <button onClick={() => handleStatusUpdate(req, 'Denied')} className="p-1 bg-red-900/20 text-red-500 rounded hover:bg-red-900/40"><X size={16}/></button>
+                                <button onClick={() => handleDelete(req.id)} className="p-1 bg-slate-800 text-slate-500 rounded hover:bg-slate-700"><span className="font-mono text-xs font-bold px-1">DEL</span></button>
+                            </>
+                        )}
+                    </td>}
                   </tr>
               ))}</tbody>
             </table>
