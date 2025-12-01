@@ -557,7 +557,6 @@ function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
         // If viewing details, update the modal locally
         if (selectedRequest && selectedRequest.id === req.id) setSelectedRequest(prev => ({...prev, status: newStatus})); 
         
-        // Only send email if it's NOT a completion (to avoid spamming on return)
         if (newStatus !== 'Completed') {
             sendNotificationEmail({ to_name: req.fullName, to_email: req.email, subject: `Request Update: ${req.title}`, title: req.title, status: newStatus, message: `Status updated to ${newStatus}.` }); 
         }
@@ -579,52 +578,91 @@ function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
             case 'Approved': return 'bg-green-950/50 text-green-400 border-green-500/30'; 
             case 'Denied': return 'bg-red-950/50 text-red-400 border-red-500/30'; 
             case 'Completed': return 'bg-slate-800 text-slate-400 border-slate-700'; 
-            case 'Returned': return 'bg-blue-900/50 text-blue-400 border-blue-500/30 animate-pulse'; // Highlight returns
+            case 'Returned': return 'bg-blue-900/50 text-blue-400 border-blue-500/30 animate-pulse';
             default: return 'bg-amber-950/50 text-amber-400 border-amber-500/30'; 
         }
     };
 
     return (
-      <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl relative">
+      <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl relative min-h-[500px]">
+        {/* --- DETAIL OVERLAY (Now Contained Inside) --- */}
         {selectedRequest && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-fade-in">
-            <div className="bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col">
-              <div className="p-6 border-b border-slate-800 flex justify-between items-start sticky top-0 bg-slate-900 z-10">
-                <div><h3 className="text-xl font-bold text-white">Data Packet</h3><div className="flex gap-3 text-xs text-cyan-500 font-mono mt-1"><span>ID: {selectedRequest.displayId || 'N/A'}</span><span className="opacity-50">| Ref: {selectedRequest.id}</span></div></div>
-                <button onClick={() => setSelectedRequest(null)} className="text-slate-400 hover:text-white hover:bg-slate-800 p-2 rounded-full transition-colors"><X size={20} /></button>
-              </div>
-              <div className="p-6 space-y-6">
-                 {/* --- NEW: Show Return Condition if available --- */}
+          <div className="absolute inset-0 bg-slate-900 z-50 flex flex-col animate-fade-in">
+            {/* Overlay Header */}
+            <div className="p-6 border-b border-slate-800 flex justify-between items-start bg-slate-950/50">
+                <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Briefcase className="text-cyan-400" size={20} /> Request Details
+                    </h3>
+                    <div className="flex gap-3 text-xs text-slate-400 font-mono mt-1">
+                        <span>ID: {selectedRequest.displayId || 'N/A'}</span>
+                        <span className="opacity-30">|</span>
+                        <span>{selectedRequest.formattedDate}</span>
+                    </div>
+                </div>
+                <button 
+                    onClick={() => setSelectedRequest(null)} 
+                    className="group flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all text-xs font-bold uppercase tracking-wider"
+                >
+                    Close <X size={16} />
+                </button>
+            </div>
+
+            {/* Overlay Content (Scrollable) */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                 {/* Return Condition Report */}
                  {selectedRequest.conditionReport && (
-                     <div className="bg-blue-950/30 border border-blue-500/30 p-4 rounded-lg">
-                         <h4 className="text-blue-400 text-xs font-bold uppercase mb-1">Student Return Report</h4>
-                         <p className="text-white text-sm">{selectedRequest.conditionReport}</p>
+                     <div className="bg-blue-950/20 border border-blue-500/20 p-4 rounded-lg flex gap-3 items-start">
+                         <div className="p-2 bg-blue-900/30 rounded text-blue-400"><CornerDownLeft size={20}/></div>
+                         <div>
+                            <h4 className="text-blue-400 text-xs font-bold uppercase mb-1">Return Condition Report</h4>
+                            <p className="text-slate-300 text-sm">{selectedRequest.conditionReport}</p>
+                         </div>
                      </div>
                  )}
 
-                 <div className="grid grid-cols-2 gap-y-4 gap-x-8">
-                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Sector</label><p className="font-semibold text-white capitalize">{selectedRequest.dept}</p></div>
-                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Status</label><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${getStatusColor(selectedRequest.status)}`}>{selectedRequest.status}</span></div>
-                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Operative</label><p className="text-slate-200">{selectedRequest.fullName}</p></div>
-                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Comm Link</label><p className="text-slate-200 font-mono text-sm">{selectedRequest.email}</p></div>
+                 {/* Core Stats Grid */}
+                 <div className="grid grid-cols-2 gap-y-4 gap-x-8 bg-slate-950/30 p-5 rounded-xl border border-slate-800">
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Sector</label><p className="font-semibold text-white capitalize">{selectedRequest.dept}</p></div>
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Status</label><span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border inline-block ${getStatusColor(selectedRequest.status)}`}>{selectedRequest.status}</span></div>
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Operative</label><p className="text-slate-200">{selectedRequest.fullName}</p></div>
+                    <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Contact</label><p className="text-slate-200 font-mono text-sm">{selectedRequest.email}</p></div>
                  </div>
-                 <div className="border-t border-slate-800 pt-4">
-                    <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide"><Briefcase size={16} className="text-cyan-500"/> Mission Details</h4>
-                    <div className="bg-slate-950/50 rounded-lg p-4 space-y-4 border border-slate-800">
+
+                 {/* Dynamic Details */}
+                 <div>
+                    <h4 className="font-bold text-slate-400 mb-3 text-xs uppercase tracking-wide border-b border-slate-800 pb-2">Mission Data</h4>
+                    <div className="grid grid-cols-1 gap-4">
                       {Object.entries(selectedRequest).map(([key, value]) => {
                         if(['id', 'dept', 'status', 'fullName', 'email', 'role', 'formattedDate', 'createdAt', 'title', 'requestName', 'displayId', 'conditionReport', 'returnedAt'].includes(key)) return null;
-                        if(Array.isArray(value)) return <div key={key}><label className="text-xs font-bold text-slate-500 uppercase block mb-1">{key}</label><ul className="list-disc list-inside text-sm text-slate-300 bg-slate-900 p-2 rounded border border-slate-800">{value.map((v,i)=><li key={i}>{v}</li>)}</ul></div>;
-                        return <div key={key}><label className="text-xs font-bold text-slate-500 uppercase block mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}</label><p className="text-slate-300 text-sm whitespace-pre-wrap">{value}</p></div>
+                        if (!value) return null;
+                        
+                        return (
+                            <div key={key} className="bg-slate-950/50 p-4 rounded-lg border border-slate-800/50">
+                                <label className="text-[10px] font-bold text-cyan-600 uppercase block mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}</label>
+                                {Array.isArray(value) ? (
+                                    <ul className="list-disc list-inside text-sm text-slate-300 space-y-1 ml-1">{value.map((v,i)=><li key={i}>{v}</li>)}</ul>
+                                ) : (
+                                    <p className="text-slate-300 text-sm whitespace-pre-wrap leading-relaxed">{value}</p>
+                                )}
+                            </div>
+                        );
                       })}
                     </div>
                  </div>
-                 {adminMode && (<div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700"><h4 className="font-bold text-slate-400 mb-3 text-xs uppercase tracking-wide">Command Actions</h4><div className="flex gap-3"><button onClick={() => handleStatusUpdate(selectedRequest, 'Approved')} className="flex-1 py-2 bg-green-900/30 text-green-400 border border-green-900 hover:bg-green-900/50 rounded text-sm font-medium transition-colors">Approve</button><button onClick={() => handleStatusUpdate(selectedRequest, 'Denied')} className="flex-1 py-2 bg-red-900/30 text-red-400 border border-red-900 hover:bg-red-900/50 rounded text-sm font-medium transition-colors">Deny</button></div></div>)}
-              </div>
             </div>
+
+            {/* Overlay Footer (Admin Actions) */}
+            {adminMode && (
+                <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex gap-3">
+                    <button onClick={() => handleStatusUpdate(selectedRequest, 'Approved')} className="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-green-900/20 transition-all flex justify-center items-center gap-2"><Check size={18}/> Approve</button>
+                    <button onClick={() => handleStatusUpdate(selectedRequest, 'Denied')} className="flex-1 py-3 bg-red-900/20 text-red-400 border border-red-900/50 hover:bg-red-900/40 rounded-lg text-sm font-bold transition-all flex justify-center items-center gap-2"><X size={18}/> Deny</button>
+                </div>
+            )}
           </div>
         )}
         
-        {/* Header Section */}
+        {/* --- MAIN TABLE VIEW --- */}
         <div className="bg-slate-950/50 border-b border-slate-800 p-4 md:p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div><h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 text-white"><ClipboardList className="text-purple-400" /> Request Log</h2><p className="text-slate-400 text-sm">Live Database Feed</p></div>
           <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
@@ -636,8 +674,7 @@ function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
           </div>
         </div>
 
-        {/* Table Section */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-[400px]">
           {loading ? <div className="p-8 text-center text-slate-500 font-mono">INITIALIZING STREAM...</div> : (
             <table className="w-full text-left border-collapse min-w-[700px]">
               <thead><tr className="bg-slate-900/50 border-b border-slate-800 text-xs uppercase text-slate-500 font-mono"><th className="p-4">ID Code</th><th className="p-4">Sector</th><th className="p-4">Objective</th><th className="p-4">Agent</th><th className="p-4">Status</th><th className="p-4">View</th>{adminMode && <th className="p-4">Override</th>}</tr></thead>
