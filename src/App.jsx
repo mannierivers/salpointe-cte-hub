@@ -405,6 +405,7 @@ const App = () => {
 function MyRequestsView({ currentUser }) {
     const [myRequests, setMyRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedRequest, setSelectedRequest] = useState(null); // New state for detail view
 
     useEffect(() => {
         if (!currentUser) return;
@@ -419,10 +420,9 @@ function MyRequestsView({ currentUser }) {
 
     const handleCancel = async (id) => { if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "requests", id)); };
 
-    // *** NEW: STUDENT RETURN LOGIC ***
     const handleReturn = async (id) => {
         const condition = prompt("Optional: Any damage or issues to report? (Leave empty if good)");
-        if (condition === null) return; // User clicked Cancel
+        if (condition === null) return; 
 
         try {
             await updateDoc(doc(db, "requests", id), {
@@ -442,19 +442,89 @@ function MyRequestsView({ currentUser }) {
             'Approved': 'bg-green-950/50 text-green-400 border-green-500/30', 
             'Denied': 'bg-red-950/50 text-red-400 border-red-500/30', 
             'Completed': 'bg-slate-800 text-slate-400 border-slate-700', 
-            'Returned': 'bg-blue-950/50 text-blue-400 border-blue-500/30', // New Style
+            'Returned': 'bg-blue-950/50 text-blue-400 border-blue-500/30',
             'default': 'bg-amber-950/50 text-amber-400 border-amber-500/30' 
         };
         return <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${styles[status] || styles['default']}`}>{status}</span>;
     };
 
     return (
-        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+        <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden shadow-2xl relative min-h-[500px]">
+            
+            {/* --- DETAIL OVERLAY (Student View) --- */}
+            {selectedRequest && (
+              <div className="absolute inset-0 bg-slate-900 z-50 flex flex-col animate-fade-in">
+                {/* Header */}
+                <div className="p-6 border-b border-slate-800 flex justify-between items-start bg-slate-950/50">
+                    <div>
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            <Briefcase className="text-cyan-400" size={20} /> Request Details
+                        </h3>
+                        <div className="flex gap-3 text-xs text-slate-400 font-mono mt-1">
+                            <span>ID: {selectedRequest.displayId || 'N/A'}</span>
+                            <span className="opacity-30">|</span>
+                            <span>{selectedRequest.formattedDate}</span>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setSelectedRequest(null)} 
+                        className="group flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-all text-xs font-bold uppercase tracking-wider"
+                    >
+                        Close <X size={16} />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                     {/* Stats Grid */}
+                     <div className="grid grid-cols-2 gap-y-4 gap-x-8 bg-slate-950/30 p-5 rounded-xl border border-slate-800">
+                        <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Sector</label><p className="font-semibold text-white capitalize">{selectedRequest.dept}</p></div>
+                        <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Status</label><div>{getStatusBadge(selectedRequest.status)}</div></div>
+                        <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Project Name</label><p className="text-slate-200">{selectedRequest.title}</p></div>
+                        <div><label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Date Logged</label><p className="text-slate-200 font-mono text-sm">{selectedRequest.formattedDate}</p></div>
+                     </div>
+
+                     {/* Return Condition Report (If Applicable) */}
+                     {selectedRequest.conditionReport && (
+                         <div className="bg-blue-950/20 border border-blue-500/20 p-4 rounded-lg flex gap-3 items-start">
+                             <div className="p-2 bg-blue-900/30 rounded text-blue-400"><CornerDownLeft size={20}/></div>
+                             <div>
+                                <h4 className="text-blue-400 text-xs font-bold uppercase mb-1">Return Status</h4>
+                                <p className="text-slate-300 text-sm">Condition Report: {selectedRequest.conditionReport}</p>
+                             </div>
+                         </div>
+                     )}
+
+                     {/* Dynamic Data Fields */}
+                     <div>
+                        <h4 className="font-bold text-slate-400 mb-3 text-xs uppercase tracking-wide border-b border-slate-800 pb-2">Full Specifications</h4>
+                        <div className="grid grid-cols-1 gap-4">
+                          {Object.entries(selectedRequest).map(([key, value]) => {
+                            if(['id', 'dept', 'status', 'fullName', 'email', 'role', 'formattedDate', 'createdAt', 'title', 'requestName', 'displayId', 'conditionReport', 'returnedAt'].includes(key)) return null;
+                            if (!value) return null;
+                            
+                            return (
+                                <div key={key} className="bg-slate-950/50 p-4 rounded-lg border border-slate-800/50">
+                                    <label className="text-[10px] font-bold text-cyan-600 uppercase block mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}</label>
+                                    {Array.isArray(value) ? (
+                                        <ul className="list-disc list-inside text-sm text-slate-300 space-y-1 ml-1">{value.map((v,i)=><li key={i}>{v}</li>)}</ul>
+                                    ) : (
+                                        <p className="text-slate-300 text-sm whitespace-pre-wrap leading-relaxed">{value}</p>
+                                    )}
+                                </div>
+                            );
+                          })}
+                        </div>
+                     </div>
+                </div>
+              </div>
+            )}
+
             <div className="bg-slate-950/50 border-b border-slate-800 p-6"><h2 className="text-xl font-bold text-white flex items-center gap-2"><History className="text-cyan-400" /> My Request History</h2></div>
             <div className="overflow-x-auto">
                 {loading ? <div className="p-8 text-center text-slate-500 font-mono">LOADING DATA...</div> : myRequests.length === 0 ? <div className="p-12 text-center text-slate-500">No records found.</div> : (
                     <table className="w-full text-left border-collapse min-w-[700px]">
-                        <thead><tr className="bg-slate-800/50 border-b border-slate-700 text-xs uppercase text-slate-400 font-mono"><th className="p-4">Ref ID</th><th className="p-4">Dept</th><th className="p-4">Project</th><th className="p-4">Date Submitted</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
+                        <thead><tr className="bg-slate-800/50 border-b border-slate-700 text-xs uppercase text-slate-400 font-mono"><th className="p-4">Ref ID</th><th className="p-4">Dept</th><th className="p-4">Project</th><th className="p-4">Date</th><th className="p-4">Status</th><th className="p-4">View</th><th className="p-4">Action</th></tr></thead>
                         <tbody className="divide-y divide-slate-800">{myRequests.map((req) => (
                             <tr key={req.id} className="hover:bg-slate-800/50 transition-colors">
                                 <td className="p-4 text-cyan-400 font-mono text-xs">{req.displayId}</td>
@@ -463,8 +533,12 @@ function MyRequestsView({ currentUser }) {
                                 <td className="p-4 text-slate-400 text-sm font-mono">{req.formattedDate}</td>
                                 <td className="p-4">{getStatusBadge(req.status)}</td>
                                 <td className="p-4">
+                                    <button onClick={() => setSelectedRequest(req)} className="text-slate-500 hover:text-cyan-400 p-2 transition-colors" title="View Details">
+                                        <Eye size={20} />
+                                    </button>
+                                </td>
+                                <td className="p-4">
                                     {req.status === 'Pending Review' && <button onClick={() => handleCancel(req.id)} className="text-xs text-red-400 border border-red-900 hover:bg-red-950/50 px-3 py-1 rounded transition-colors">Cancel</button>}
-                                    {/* NEW CHECK-IN BUTTON */}
                                     {req.status === 'Approved' && (
                                         <button onClick={() => handleReturn(req.id)} className="text-xs font-bold text-blue-400 border border-blue-900 bg-blue-950/30 hover:bg-blue-900/50 px-3 py-1 rounded transition-colors flex items-center gap-1">
                                             <CornerDownLeft size={12} /> Check In
