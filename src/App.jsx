@@ -1117,10 +1117,13 @@ function FilmForm(props) {
       );
   }
 
-  function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser, blackouts = [] }) { 
+function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, initialData = {}, onCancel, currentUser, blackouts = [] }) { 
       const formRef = useRef(null);
       const draftKey = getDraftKey(title);
       const [showExitPrompt, setShowExitPrompt] = useState(false);
+      
+      // *** NEW: Loading State to prevent double-clicks ***
+      const [isSubmitting, setIsSubmitting] = useState(false);
 
       const saveDraftToStorage = () => { 
           const formData = new FormData(formRef.current); 
@@ -1159,6 +1162,11 @@ function FilmForm(props) {
 
       const handleSubmit = async (e) => { 
           e.preventDefault(); 
+          
+          // *** PREVENT DOUBLE SUBMISSION ***
+          if (isSubmitting) return;
+          setIsSubmitting(true);
+
           const formData = new FormData(e.target); 
           const data = {}; 
           for (const [key, value] of formData.entries()) { 
@@ -1180,6 +1188,7 @@ function FilmForm(props) {
           
           if (conflictFound) { 
               alert("Date blocked by admin protocol. Select alternative."); 
+              setIsSubmitting(false); // Re-enable button
               return; 
           } 
           
@@ -1188,45 +1197,46 @@ function FilmForm(props) {
               const randomNum = Math.floor(1000 + Math.random() * 9000); 
               const displayId = `REQ-${timestampSuffix}-${randomNum}`; 
               
+              // 1. Determine the correct recipient based on the Form Title
+              // (Ensure DEPT_HEADS is defined at the top of your file)
+              const recipientEmail = (typeof DEPT_HEADS !== 'undefined' ? DEPT_HEADS[title] : null) || "erivers@salpointe.org";
+
               await addDoc(collection(db, "requests"), { 
                   ...data, 
                   dept: title, 
                   displayId: displayId, 
                   status: "Pending Review", 
                   createdAt: new Date(), 
+                  email: currentUser.email, // Ensure email is saved for indexing
+                  fullName: currentUser.displayName,
                   title: data.requestName || data.eventName || data.projectType || data.businessName || "New Request" 
               }); 
               
-// ... inside handleSubmit ...
-
-              // 1. Determine the correct recipient based on the Form Title
-              const recipientEmail = DEPT_HEADS[title] || DEPT_HEADS["Default"];
-
-              await addDoc(collection(db, "requests"), { 
-                  ...data, 
-                  dept: title, 
-                  displayId: displayId, 
-                  status: "Pending Review", 
-                  createdAt: new Date(), 
-                  title: data.requestName || data.eventName || data.projectType || data.businessName || "New Request" 
-              }); 
               
               sendNotificationEmail({ 
                   to_name: "Department Head", 
-                  to_email: recipientEmail, // <--- NOW DYNAMIC
+                  to_email: recipientEmail, 
                   subject: `New Request: ${data.requestName}`, 
                   title: data.requestName, 
                   status: "Pending Review", 
                   message: `New request (${displayId}) from ${data.fullName}.` 
               }); 
 
-              // ... rest of the function ... 
+              sendNotificationEmail({
+                to_name: currentUser.displayName || "Student",
+                to_email: currentUser.email,
+                subject: `Request Submitted: ${data.requestName}`,
+                title: data.requestName,
+                status: "Pending Review",
+                message: `Your request (${displayId}) has been submitted successfully. We will review it and get back to you soon.`
+              })
               
               localStorage.removeItem(draftKey); 
               setSubmitted(true); 
           } catch (error) { 
               console.error(error); 
-              alert("Transmission error."); 
+              alert("Transmission error. Please try again."); 
+              setIsSubmitting(false); // Re-enable button on error
           } 
       };
 
@@ -1261,7 +1271,19 @@ function FilmForm(props) {
               <div className="mt-8 flex flex-col-reverse sm:flex-row justify-end gap-3 pt-6 border-t border-slate-800">
                 <button type="button" onClick={handleCancelRequest} className="flex items-center justify-center gap-2 bg-transparent border border-slate-700 text-slate-400 px-6 py-3 rounded-lg font-semibold hover:bg-slate-800 hover:text-white transition-all">Abort</button>
                 <button type="button" onClick={handleSaveDraftButton} className="flex items-center justify-center gap-2 bg-slate-800 border border-slate-700 text-cyan-400 px-6 py-3 rounded-lg font-semibold hover:bg-slate-700 hover:border-cyan-500/50 transition-all"><Save size={18} /> Save Draft</button>
-                <button type="submit" className="w-full sm:w-auto bg-cyan-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-cyan-500 transition-all shadow-[0_0_20px_rgba(8,145,178,0.4)] tracking-wide">INITIALIZE REQUEST</button>
+                
+                {/* *** UPDATED SUBMIT BUTTON *** */}
+                <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className={`w-full sm:w-auto px-8 py-3 rounded-lg font-bold transition-all shadow-[0_0_20px_rgba(8,145,178,0.4)] tracking-wide flex items-center justify-center gap-2 ${isSubmitting ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-cyan-600 text-white hover:bg-cyan-500'}`}
+                >
+                    {isSubmitting ? (
+                        <>Processing...</>
+                    ) : (
+                        "INITIALIZE REQUEST"
+                    )}
+                </button>
               </div>
             </form>
           </div>
