@@ -35,6 +35,17 @@ const ALLOWED_ADMINS = [
     "erivers@salpointe.org" 
 ];
 
+// *** DEPARTMENT EMAIL ROUTING ***
+const DEPT_HEADS = {
+  "Film & TV": "erivers@salpointe.org",
+  "Graphic Design": "erivers@salpointe.org", // Update if different
+  "Business & Startup": "vdunk@salpointe.org",
+  "Culinary Arts": "cneff@salpointe.org",   // Update if different
+  "Photography": "krashka@salpointe.org",   // Update if different
+  "System Feedback": "erivers@salpointe.org", // Fallback for feedback
+  "Default": "erivers@salpointe.org"          // Fallback for errors
+};
+
 // *** DEFAULT FALLBACK INVENTORY ***
 const DEFAULT_INVENTORY = {
   'Cinema Camera Kit': { count: 1, category: 'film', requiresTraining: true },
@@ -1186,14 +1197,30 @@ function FilmForm(props) {
                   title: data.requestName || data.eventName || data.projectType || data.businessName || "New Request" 
               }); 
               
+// ... inside handleSubmit ...
+
+              // 1. Determine the correct recipient based on the Form Title
+              const recipientEmail = DEPT_HEADS[title] || DEPT_HEADS["Default"];
+
+              await addDoc(collection(db, "requests"), { 
+                  ...data, 
+                  dept: title, 
+                  displayId: displayId, 
+                  status: "Pending Review", 
+                  createdAt: new Date(), 
+                  title: data.requestName || data.eventName || data.projectType || data.businessName || "New Request" 
+              }); 
+              
               sendNotificationEmail({ 
-                  to_name: "Admin", 
-                  to_email: "erivers@salpointe.org", 
+                  to_name: "Department Head", 
+                  to_email: recipientEmail, // <--- NOW DYNAMIC
                   subject: `New Request: ${data.requestName}`, 
                   title: data.requestName, 
                   status: "Pending Review", 
                   message: `New request (${displayId}) from ${data.fullName}.` 
               }); 
+
+              // ... rest of the function ... 
               
               localStorage.removeItem(draftKey); 
               setSubmitted(true); 
