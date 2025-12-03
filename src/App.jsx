@@ -39,9 +39,9 @@ import {
 } from "firebase/firestore";
 
 // --- ASSETS ---
-// [FIXED] Using Data URI instead of local file to prevent build errors
-const salpointeLogo = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%237f1d1d' stroke='%23fbbf24' stroke-width='5'/%3E%3Ctext x='50' y='65' font-family='Arial' font-weight='bold' font-size='50' text-anchor='middle' fill='white'%3ES%3C/text%3E%3C/svg%3E";
-
+// [RESTORED] Importing the local logo file. 
+// MAKE SURE 'SC-LOGO-RGB.png' EXISTS IN YOUR PROJECT FOLDER!
+import salpointeLogo from './SC-LOGO-RGB.png'; 
 
 // --- FIREBASE INITIALIZATION ---
 // Using the environment's config or falling back to a placeholder if testing locally
@@ -280,15 +280,6 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500/30 flex flex-col">
-      {/* CSS Override for Date/Time Picker Icons on Dark Background */}
-      <style>{`
-        input[type="date"]::-webkit-calendar-picker-indicator,
-        input[type="time"]::-webkit-calendar-picker-indicator {
-          filter: invert(1) opacity(0.8);
-          cursor: pointer;
-        }
-      `}</style>
-
       <div className="fixed inset-0 z-0 pointer-events-none opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(6, 182, 212, 0.15) 1px, transparent 0)', backgroundSize: '32px 32px' }}></div>
       <div className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-b from-transparent via-slate-950/50 to-slate-950"></div>
 
@@ -1077,39 +1068,64 @@ function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
   }
 
 function FilmForm(props) {
-      const [requestType, setRequestType] = useState('checkout'); 
+      const [requestType, setRequestType] = useState('checkout'); // 'checkout' or 'event'
 
       return (
           <FormContainer title="Film & TV" icon={Video} colorClass="bg-cyan-400" {...props}>
+              {/* --- TYPE TOGGLE --- */}
               <div className="flex gap-4 mb-6 p-1 bg-slate-950 rounded-lg border border-slate-800">
-                  <button type="button" onClick={() => setRequestType('checkout')} className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'checkout' ? 'bg-slate-800 text-cyan-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}><Box size={16} /> Equipment Checkout</button>
-                  <button type="button" onClick={() => setRequestType('event')} className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'event' ? 'bg-slate-800 text-cyan-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}><MonitorPlay size={16} /> Event Coverage</button>
+                  <button 
+                      type="button" 
+                      onClick={() => setRequestType('checkout')}
+                      className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'checkout' ? 'bg-slate-800 text-cyan-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                      <Box size={16} /> Equipment Checkout
+                  </button>
+                  <button 
+                      type="button" 
+                      onClick={() => setRequestType('event')}
+                      className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'event' ? 'bg-slate-800 text-cyan-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                      <MonitorPlay size={16} /> Event Coverage
+                  </button>
               </div>
+
+              {/* --- HIDDEN FIELD FOR DATABASE --- */}
               <input type="hidden" name="requestType" value={requestType} />
 
+              {/* --- CHECKOUT MODE --- */}
               {requestType === 'checkout' && (
                   <div className="space-y-4 animate-fade-in">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* ADDED [color-scheme:dark] TO INPUTS BELOW */}
-                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
-                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
                       </div>
                       <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project/Shoot Location</label><input type="text" name="location" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Gym, Field, Off-campus" required /></div>
                       <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Details</label><textarea name="details" rows={3} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe the shoot..." required /></div>
+                      
                       <InventorySelector inventory={props.inventory} category="film" />
                   </div>
               )}
 
+              {/* --- EVENT COVERAGE MODE --- */}
               {requestType === 'event' && (
                   <div className="space-y-4 animate-fade-in">
-                      <div className="p-4 bg-cyan-950/30 border border-cyan-500/30 rounded-lg text-xs text-cyan-200 mb-4">Requesting the Film crew to record or livestream a school event.</div>
+                      <div className="p-4 bg-cyan-950/30 border border-cyan-500/30 rounded-lg text-xs text-cyan-200 mb-4">
+                          Requesting the Film crew to record or livestream a school event.
+                      </div>
                       <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Name</label><input type="text" name="eventName" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Varsity Football vs. Walden Grove" required /></div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* ADDED [color-scheme:dark] TO INPUTS BELOW */}
-                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
-                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Start Time</label><input type="time" name="startTime" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Start Time</label><input type="time" name="startTime" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
                       </div>
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Coverage Type</label><select name="coverageType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Live Stream (Broadcast)</option><option>Recording (Raw Footage)</option><option>Highlight Reel (Edited)</option></select></div>
+                      <div>
+                          <label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Coverage Type</label>
+                          <select name="coverageType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none">
+                              <option>Live Stream (Broadcast)</option>
+                              <option>Recording (Raw Footage)</option>
+                              <option>Highlight Reel (Edited)</option>
+                          </select>
+                      </div>
                       <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Location / Details</label><textarea name="details" rows={3} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Specific shots needed? Location details?" required /></div>
                   </div>
               )}
@@ -1118,36 +1134,53 @@ function FilmForm(props) {
   }
 
   function PhotoForm(props) {
-      const [requestType, setRequestType] = useState('service'); 
+      const [requestType, setRequestType] = useState('service'); // Default to service/event for photo
 
       return (
           <FormContainer title="Photography" icon={Camera} colorClass="bg-pink-400" {...props}>
+               {/* --- TYPE TOGGLE --- */}
                <div className="flex gap-4 mb-6 p-1 bg-slate-950 rounded-lg border border-slate-800">
-                  <button type="button" onClick={() => setRequestType('service')} className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'service' ? 'bg-slate-800 text-pink-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}><Users size={16} /> Event Coverage</button>
-                  <button type="button" onClick={() => setRequestType('checkout')} className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'checkout' ? 'bg-slate-800 text-pink-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}><Box size={16} /> Equipment Checkout</button>
+                  <button 
+                      type="button" 
+                      onClick={() => setRequestType('service')}
+                      className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'service' ? 'bg-slate-800 text-pink-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                      <Users size={16} /> Event Coverage
+                  </button>
+                  <button 
+                      type="button" 
+                      onClick={() => setRequestType('checkout')}
+                      className={`flex-1 py-3 rounded-md text-sm font-bold transition-all flex items-center justify-center gap-2 ${requestType === 'checkout' ? 'bg-slate-800 text-pink-400 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                  >
+                      <Box size={16} /> Equipment Checkout
+                  </button>
               </div>
+
               <input type="hidden" name="requestType" value={requestType} />
 
+               {/* --- CHECKOUT MODE --- */}
                {requestType === 'checkout' && (
                    <div className="space-y-4 animate-fade-in">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* ADDED [color-scheme:dark] TO INPUTS BELOW */}
-                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
-                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Checkout Date</label><input type="date" name="checkoutDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Return Date</label><input type="date" name="returnDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
                       </div>
                       <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Project Subject</label><input type="text" name="projectSubject" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Senior Portraits" required /></div>
+                      
                       <InventorySelector inventory={props.inventory} category="photo" />
                   </div>
                )}
 
+               {/* --- EVENT MODE --- */}
                {requestType === 'service' && (
                    <div className="space-y-4 animate-fade-in">
-                      <div className="p-4 bg-pink-950/30 border border-pink-500/30 rounded-lg text-xs text-pink-200 mb-4">Request a photographer to cover a specific school event.</div>
+                      <div className="p-4 bg-pink-950/30 border border-pink-500/30 rounded-lg text-xs text-pink-200 mb-4">
+                          Request a photographer to cover a specific school event.
+                      </div>
                       <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Name</label><input type="text" name="eventName" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Homecoming Assembly" required /></div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* ADDED [color-scheme:dark] TO INPUTS BELOW */}
-                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
-                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Start Time</label><input type="time" name="startTime" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
+                          <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Start Time</label><input type="time" name="startTime" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div>
                       </div>
                       <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Location</label><input type="text" name="location" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. Courtyard" required /></div>
                       <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Shot List / Needs</label><textarea name="details" rows={3} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="List specific people or moments to capture..." required /></div>
@@ -1161,11 +1194,7 @@ function FilmForm(props) {
       return (
           <FormContainer title="Graphic Design" icon={PenTool} colorClass="bg-fuchsia-400" {...props}>
               <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* ADDED [color-scheme:dark] TO INPUT BELOW */}
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Deadline</label><input type="date" name="deadline" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Format</label><select name="format" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Digital (Social Media/Web)</option><option>Print (Poster/Flyer)</option><option>Apparel</option><option>Logo / Branding</option></select></div>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Deadline</label><input type="date" name="deadline" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Format</label><select name="format" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Digital (Social Media/Web)</option><option>Print (Poster/Flyer)</option><option>Apparel</option><option>Logo / Branding</option></select></div></div>
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Design Brief</label><textarea name="brief" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Describe colors, style, text required..." required /></div>
               </div>
           </FormContainer>
@@ -1176,11 +1205,7 @@ function FilmForm(props) {
       return (
           <FormContainer title="Business & Startup" icon={Briefcase} colorClass="bg-emerald-400" {...props}>
               <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* ADDED [color-scheme:dark] TO INPUT BELOW */}
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Meeting Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Service Type</label><select name="serviceType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Consultation</option><option>Business Plan Review</option><option>Marketing Strategy</option><option>Pitch Deck Prep</option></select></div>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Meeting Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Service Type</label><select name="serviceType" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none"><option>Consultation</option><option>Business Plan Review</option><option>Marketing Strategy</option><option>Pitch Deck Prep</option></select></div></div>
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Objective</label><textarea name="objective" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="What are your goals?" required /></div>
               </div>
           </FormContainer>
@@ -1191,11 +1216,7 @@ function FilmForm(props) {
       return (
           <FormContainer title="Culinary Arts" icon={Utensils} colorClass="bg-amber-400" {...props}>
               <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* ADDED [color-scheme:dark] TO INPUT BELOW */}
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none [color-scheme:dark]" required /></div>
-                      <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Headcount</label><input type="number" name="headcount" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. 50" required /></div>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Event Date</label><input type="date" name="eventDate" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" required /></div><div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Headcount</label><input type="number" name="headcount" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="e.g. 50" required /></div></div>
                   <div><label className="block text-xs font-mono text-slate-500 uppercase mb-1 ml-1">Menu Requirements</label><textarea name="menu" rows={4} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-slate-200 focus:border-cyan-500 outline-none" placeholder="Dietary restrictions, food preferences..." required /></div>
               </div>
           </FormContainer>
