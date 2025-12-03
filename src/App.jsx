@@ -37,30 +37,16 @@ import {
   setDoc, 
   getDoc 
 } from "firebase/firestore";
+from 'firebase/auth';
+import emailjs from '@emailjs/browser'; 
 
-// --- ASSETS ---
-// [RESTORED] Importing the local logo file. 
-// MAKE SURE 'SC-LOGO-RGB.png' EXISTS IN YOUR PROJECT FOLDER!
 import salpointeLogo from './SC-LOGO-RGB.png'; 
 
-// --- FIREBASE INITIALIZATION ---
-// Using the environment's config or falling back to a placeholder if testing locally
-const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const googleProvider = new GoogleAuthProvider();
-
-
-// Mock EmailJS to prevent build error
-const sendNotificationEmail = async (templateParams) => {
-  console.log("------------------------------------------------");
-  console.log(" [MOCK EMAIL SERVICE] ");
-  console.log(" To:", templateParams.to_email);
-  console.log(" Subject:", templateParams.subject);
-  console.log(" Message:", templateParams.message);
-  console.log("------------------------------------------------");
-  return Promise.resolve({ status: 200, text: 'OK' });
+// *** CONFIGURATION SECTION ***
+const EMAILJS_CONFIG = {
+  SERVICE_ID: "service_dp1gjh1",   
+  TEMPLATE_ID: "template_kyo4h1e", 
+  PUBLIC_KEY: "CZo6tBrAGwmjLwTr6"    
 };
 
 // *** CONFIGURATION SECTION ***
