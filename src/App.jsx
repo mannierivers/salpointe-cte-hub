@@ -10,7 +10,13 @@ import {
 } from 'lucide-react';
 import { db, auth, googleProvider } from './firebase-config'; 
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged, 
+  signInWithRedirect,   // <--- NEW
+  getRedirectResult     // <--- NEW
+} from 'firebase/auth';
 import emailjs from '@emailjs/browser'; 
 
 import salpointeLogo from './SC-LOGO-RGB.png'; 
@@ -110,7 +116,9 @@ const App = () => {
   // Secret Game Unlock State
   const [logoClicks, setLogoClicks] = useState(0);
 
+  // --- AUTHENTICATION LOGIC ---
   useEffect(() => {
+    // 1. Check if user is already logged in
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setCurrentUser(user);
@@ -120,8 +128,20 @@ const App = () => {
         setAdminMode(false);
       }
     });
+
+    // 2. Check if user just returned from a Redirect Login (Mobile fix)
+    getRedirectResult(auth).then((result) => {
+        if (result) {
+            // User successfully logged in via Redirect
+            setCurrentView(Departments.DASHBOARD);
+        }
+    }).catch((error) => {
+        console.error("Redirect login failed:", error);
+    });
+
     return () => unsubscribe();
   }, []);
+
 
   useEffect(() => {
     const fetchInventory = async () => {
@@ -150,13 +170,27 @@ const App = () => {
     return () => unsubscribeBlackouts();
   }, []);
 
-  const handleLogin = async () => { 
+   const handleLogin = async () => { 
       try { 
-          await signInWithPopup(auth, googleProvider); 
-          setCurrentView(Departments.DASHBOARD); 
+          // Detect if user is on mobile
+          const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+          
+          if (isMobile) {
+              // Mobile: Use Redirect (Keeps them in the same tab)
+              await signInWithRedirect(auth, googleProvider);
+          } else {
+              // Desktop: Keep Popup (It's faster/nicer on desktop)
+              await signInWithPopup(auth, googleProvider); 
+              setCurrentView(Departments.DASHBOARD); 
+          }
       } catch (error) { 
           console.error("Login failed:", error); 
-          alert("Login failed."); 
+          // If popup fails on desktop (rare), fallback to redirect
+          if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
+              await signInWithRedirect(auth, googleProvider);
+          } else {
+              alert("Login failed. Please try again."); 
+          }
       } 
   };
   
