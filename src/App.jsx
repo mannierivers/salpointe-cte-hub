@@ -117,26 +117,30 @@ const App = () => {
   const [logoClicks, setLogoClicks] = useState(0);
 
   // --- AUTHENTICATION LOGIC ---
+  // --- AUTHENTICATION LOGIC ---
   useEffect(() => {
-    // 1. Check if user is already logged in
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUser(user);
-        setAdminMode(ALLOWED_ADMINS.includes(user.email));
-      } else {
-        setCurrentUser(null);
-        setAdminMode(false);
-      }
+    // 1. Check for Redirect Result (Mobile Error Handling)
+    getRedirectResult(auth).catch((error) => {
+        console.error("Redirect login failed:", error);
+        alert("Mobile login failed. Please try again or open in Chrome/Safari.");
     });
 
-    // 2. Check if user just returned from a Redirect Login (Mobile fix)
-    getRedirectResult(auth).then((result) => {
-        if (result) {
-            // User successfully logged in via Redirect
-            setCurrentView(Departments.DASHBOARD);
-        }
-    }).catch((error) => {
-        console.error("Redirect login failed:", error);
+    // 2. Global Auth Listener (The Source of Truth)
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in.
+        setCurrentUser(user);
+        setAdminMode(ALLOWED_ADMINS.includes(user.email));
+        
+        // *** THE FIX: Force view to Dashboard if they are currently on Landing ***
+        // This ensures mobile users get sent to the right place after the redirect reload.
+        setCurrentView((prevView) => prevView === 'landing' ? Departments.DASHBOARD : prevView);
+      } else {
+        // User is signed out.
+        setCurrentUser(null);
+        setAdminMode(false);
+        setCurrentView('landing');
+      }
     });
 
     return () => unsubscribe();
