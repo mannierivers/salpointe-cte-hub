@@ -8,36 +8,15 @@ import {
   FileX, ShieldCheck, Plus, Trash2, Edit2, MessageSquare, Bug, Lightbulb, 
   CheckSquare, Gamepad2, Trophy, CornerDownLeft 
 } from 'lucide-react';
-
-// --- FIREBASE IMPORTS ---
-import { initializeApp } from "firebase/app";
+import { db, auth, googleProvider } from './firebase-config'; 
+import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, getDocs, where, setDoc, getDoc } from 'firebase/firestore'; 
 import { 
-  getAuth, 
-  GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
   onAuthStateChanged, 
-  signInWithRedirect, 
-  getRedirectResult,
-  signInWithCustomToken,
-  signInAnonymously
-} from "firebase/auth";
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  onSnapshot, 
-  doc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
-  where, 
-  setDoc, 
-  getDoc 
-} from "firebase/firestore";
-from 'firebase/auth';
+  signInWithRedirect,   // <--- NEW
+  getRedirectResult     // <--- NEW
+} from 'firebase/auth';
 import emailjs from '@emailjs/browser'; 
 
 import salpointeLogo from './SC-LOGO-RGB.png'; 
@@ -49,7 +28,6 @@ const EMAILJS_CONFIG = {
   PUBLIC_KEY: "CZo6tBrAGwmjLwTr6"    
 };
 
-// *** CONFIGURATION SECTION ***
 const ALLOWED_ADMINS = [
     "krashka@salpointe.org", 
     "jelias@salpointe.org",
@@ -66,12 +44,12 @@ const ALLOWED_ADMINS = [
 // *** DEPARTMENT EMAIL ROUTING ***
 const DEPT_HEADS = {
   "Film & TV": "erivers@salpointe.org",
-  "Graphic Design": "erivers@salpointe.org",
+  "Graphic Design": "erivers@salpointe.org", // Update if different
   "Business & Startup": "vdunk@salpointe.org",
-  "Culinary Arts": "cneff@salpointe.org",
-  "Photography": "krashka@salpointe.org",
-  "System Feedback": "erivers@salpointe.org",
-  "Default": "erivers@salpointe.org"
+  "Culinary Arts": "cneff@salpointe.org",   // Update if different
+  "Photography": "krashka@salpointe.org",   // Update if different
+  "System Feedback": "erivers@salpointe.org", // Fallback for feedback
+  "Default": "erivers@salpointe.org"          // Fallback for errors
 };
 
 // *** DEFAULT FALLBACK INVENTORY ***
@@ -113,6 +91,15 @@ const Departments = {
 
 const getDraftKey = (deptTitle) => `salpointe_draft_${deptTitle}`;
 
+const sendNotificationEmail = (templateParams) => {
+  if (EMAILJS_CONFIG.SERVICE_ID === "YOUR_SERVICE_ID_HERE") {
+    console.warn("EmailJS not configured yet. Skipping email.");
+    return;
+  }
+  emailjs.send(EMAILJS_CONFIG.SERVICE_ID, EMAILJS_CONFIG.TEMPLATE_ID, templateParams, EMAILJS_CONFIG.PUBLIC_KEY)
+    .then((response) => console.log('EMAIL SUCCESS!', response.status, response.text), (err) => console.log('EMAIL FAILED...', err));
+};
+
 const formatDateSafe = (timestamp) => {
     if (!timestamp || !timestamp.toDate) return 'N/A';
     try { return timestamp.toDate().toLocaleDateString(); } catch (e) { return 'Invalid Date'; }
@@ -129,50 +116,24 @@ const App = () => {
   // Secret Game Unlock State
   const [logoClicks, setLogoClicks] = useState(0);
 
-  // --- FAVICON MANAGEMENT ---
-  useEffect(() => {
-    // *** UPDATE THIS STRING TO CHANGE YOUR BROWSER TAB ICON ***
-    const faviconUrl = "https://www.salpointe.org/favicon.ico"; 
-    
-    let link = document.querySelector("link[rel~='icon']");
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'icon';
-      document.getElementsByTagName('head')[0].appendChild(link);
-    }
-    link.href = faviconUrl;
-  }, []);
-
+  // --- AUTHENTICATION LOGIC ---
   // --- AUTHENTICATION LOGIC ---
   useEffect(() => {
-    // Initialize Environment Auth (for Firestore permissions)
-    const initAuth = async () => {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-            // Fallback for when we want to use Google Auth primarily,
-            // we will let the user sign in explicitly via the UI.
-            // If we sign in anonymously here, it might conflict with the popup.
-            // However, Firestore rules might require *some* auth. 
-            // We'll trust the user login flow for this app.
-        }
-    };
-    initAuth();
-
-    // Check for Redirect Result (Mobile Error Handling)
+    // 1. Check for Redirect Result (Mobile Error Handling)
     getRedirectResult(auth).catch((error) => {
         console.error("Redirect login failed:", error);
         alert("Mobile login failed. Please try again or open in Chrome/Safari.");
     });
 
-    // Global Auth Listener
+    // 2. Global Auth Listener (The Source of Truth)
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         // User is signed in.
         setCurrentUser(user);
         setAdminMode(ALLOWED_ADMINS.includes(user.email));
         
-        // Force view to Dashboard if they are currently on Landing
+        // *** THE FIX: Force view to Dashboard if they are currently on Landing ***
+        // This ensures mobile users get sent to the right place after the redirect reload.
         setCurrentView((prevView) => prevView === 'landing' ? Departments.DASHBOARD : prevView);
       } else {
         // User is signed out.
@@ -187,8 +148,6 @@ const App = () => {
 
 
   useEffect(() => {
-    // Only fetch if we have a user (rules might block public reads)
-    // or if the environment allows public reads.
     const fetchInventory = async () => {
         try {
             const docRef = doc(db, "settings", "inventory_v2"); 
@@ -196,55 +155,45 @@ const App = () => {
             if (docSnap.exists()) {
                 setInventory(docSnap.data());
             } else { 
-                // Only try to set if authenticated/allowed
-                if (auth.currentUser) {
-                    await setDoc(docRef, DEFAULT_INVENTORY); 
-                }
+                await setDoc(docRef, DEFAULT_INVENTORY); 
                 setInventory(DEFAULT_INVENTORY); 
             }
         } catch (err) {
-            // Suppress error in console if it's just a permission issue on initial load
-            // console.error("Inventory fetch failed (likely permission), using default", err);
+            console.error("Inventory fetch failed, using default", err);
             setInventory(DEFAULT_INVENTORY);
         }
     };
     fetchInventory();
 
     const q = query(collection(db, "blackout_dates"));
-    // Wrap in try/catch for permission errors during initialization
-    let unsubscribeBlackouts = () => {};
-    try {
-        unsubscribeBlackouts = onSnapshot(q, (snapshot) => {
-            const dates = snapshot.docs.map(doc => doc.id); 
-            setBlackouts(dates);
-        }, (error) => {
-            // console.log("Blackout dates sync paused (requires login).");
-        });
-    } catch(e) { console.log("Blackout listener setup failed", e); }
+    const unsubscribeBlackouts = onSnapshot(q, (snapshot) => {
+        const dates = snapshot.docs.map(doc => doc.id); 
+        setBlackouts(dates);
+    });
     
     return () => unsubscribeBlackouts();
-  }, [currentUser]); // Re-run when user logs in to get access
+  }, []);
 
    const handleLogin = async () => { 
       try { 
-          // FIX: Removed mandatory mobile redirect. 
-          // We now attempt signInWithPopup first for ALL devices.
-          // This prevents the "immediate reload loop" issue on mobile webviews/iframes 
-          // where redirect auth often loses state.
-          await signInWithPopup(auth, googleProvider); 
-          setCurrentView(Departments.DASHBOARD); 
+          // Detect if user is on mobile
+          const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+          
+          if (isMobile) {
+              // Mobile: Use Redirect (Keeps them in the same tab)
+              await signInWithRedirect(auth, googleProvider);
+          } else {
+              // Desktop: Keep Popup (It's faster/nicer on desktop)
+              await signInWithPopup(auth, googleProvider); 
+              setCurrentView(Departments.DASHBOARD); 
+          }
       } catch (error) { 
           console.error("Login failed:", error); 
-          // Only fallback to redirect if the popup was explicitly blocked by the browser
-          if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
-              try {
-                await signInWithRedirect(auth, googleProvider);
-              } catch (redirectErr) {
-                console.error("Redirect fallback failed:", redirectErr);
-                alert("Login unavailable. Please try opening this page in a native browser (Chrome/Safari).");
-              }
+          // If popup fails on desktop (rare), fallback to redirect
+          if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
+              await signInWithRedirect(auth, googleProvider);
           } else {
-              alert(`Login failed: ${error.message}`); 
+              alert("Login failed. Please try again."); 
           }
       } 
   };
@@ -443,12 +392,10 @@ const App = () => {
       { id: Departments.PHOTO, title: "Photography", icon: Camera, desc: "Reserve DSLR bodies, lenses, and event coverage.", color: "text-pink-400", bg: "group-hover:shadow-pink-500/20 group-hover:border-pink-500/50" }
     ];
 
-    const displayName = currentUser?.displayName || currentUser?.email || 'User';
-
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="col-span-full mb-4">
-          <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">{currentUser ? `Welcome, ${displayName.split(' ')[0]}.` : "Access Granted."}</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tight mb-2">{currentUser ? `Welcome, ${currentUser.displayName.split(' ')[0]}.` : "Access Granted."}</h2>
           <p className="text-slate-400 text-lg">Select a sector to initialize a request.</p>
         </div>
         {cards.map((card) => (
@@ -478,6 +425,32 @@ const App = () => {
     );
   }
 
+  function InventorySelector({ inventory, category }) {
+      // *** WHITE SCREEN FIX #1: Guard Clause ***
+      if (!inventory) return <div className="p-4 text-xs text-slate-500 border border-slate-800 rounded bg-slate-950/50">Inventory data initializing...</div>;
+
+      const filteredItems = Object.entries(inventory).filter(([_, item]) => item?.category === category);
+      
+      if (filteredItems.length === 0) return <div className="p-4 text-xs text-slate-500">No items available in this category.</div>;
+
+      return (
+          <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800 mt-4">
+              <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 border-b border-slate-800 pb-2">Equipment Request</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {filteredItems.map(([name, item]) => (
+                      <div key={name} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded hover:border-slate-600 transition-colors">
+                          <div className="flex flex-col">
+                              <span className="text-sm text-slate-200 font-medium">{name}</span>
+                              {item.requiresTraining && <span className="text-[10px] text-amber-500 flex items-center gap-1"><AlertCircle size={10} /> Training Req.</span>}
+                          </div>
+                          <input type="number" name={`gear_${name}`} min="0" max="5" placeholder="0" className="w-12 bg-slate-950 border border-slate-700 rounded p-1 text-center text-white text-sm focus:border-cyan-500 outline-none" />
+                      </div>
+                  ))}
+              </div>
+          </div>
+      );
+  }
+
 function MyRequestsView({ currentUser }) {
     const [myRequests, setMyRequests] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -486,13 +459,9 @@ function MyRequestsView({ currentUser }) {
     useEffect(() => {
         if (!currentUser) return;
         const q = query(collection(db, "requests"), where("email", "==", currentUser.email), orderBy("createdAt", "desc"));
-        // Handle snapshot errors (often permission related)
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: formatDateSafe(doc.data().createdAt) }));
             setMyRequests(reqs);
-            setLoading(false);
-        }, (error) => {
-            console.error("MyRequests Listener Error:", error);
             setLoading(false);
         });
         return () => unsubscribe();
@@ -582,9 +551,7 @@ function MyRequestsView({ currentUser }) {
                           {Object.entries(selectedRequest).map(([key, value]) => {
                             if(['id', 'dept', 'status', 'fullName', 'email', 'role', 'formattedDate', 'createdAt', 'title', 'requestName', 'displayId', 'conditionReport', 'returnedAt'].includes(key)) return null;
                             if (!value) return null;
-                            // Safe render for objects
-                            if (typeof value === 'object' && !Array.isArray(value)) return null;
-
+                            
                             return (
                                 <div key={key} className="bg-slate-950/50 p-4 rounded-lg border border-slate-800/50">
                                     <label className="text-[10px] font-bold text-cyan-600 uppercase block mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}</label>
@@ -644,27 +611,7 @@ function MyRequestsView({ currentUser }) {
     const [loading, setLoading] = useState(true);
     const nextMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() + 1)));
     const prevMonth = () => setDisplayDate(new Date(displayDate.setMonth(displayDate.getMonth() - 1)));
-    
-    useEffect(() => { 
-        const q = query(collection(db, "requests")); 
-        const unsubscribe = onSnapshot(q, (snapshot) => { 
-            const fetchedEvents = snapshot.docs.map(doc => { 
-                const data = doc.data(); 
-                let dateStr = data.eventDate || data.checkoutDate || data.pickupDate || data.deadline; 
-                if (!dateStr) return null; 
-                const [y, m, d] = dateStr.split('-').map(Number); 
-                const dateObj = new Date(y, m - 1, d); 
-                return { id: doc.id, title: data.title || data.requestName || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data }; 
-            }).filter(e => e !== null && e.status === 'Approved'); 
-            setEvents(fetchedEvents); 
-            setLoading(false); 
-        }, (err) => {
-            console.error("Calendar Sync Error:", err);
-            setLoading(false);
-        }); 
-        return () => unsubscribe(); 
-    }, []);
-
+    useEffect(() => { const q = query(collection(db, "requests")); const unsubscribe = onSnapshot(q, (snapshot) => { const fetchedEvents = snapshot.docs.map(doc => { const data = doc.data(); let dateStr = data.eventDate || data.checkoutDate || data.pickupDate || data.deadline; if (!dateStr) return null; const [y, m, d] = dateStr.split('-').map(Number); const dateObj = new Date(y, m - 1, d); return { id: doc.id, title: data.title || data.requestName || "Request", displayId: data.displayId, dept: data.dept, type: (data.requestType === 'checkout' || data.dept === 'Graphic') ? 'checkout' : 'event', status: data.status, date: dateObj, ...data }; }).filter(e => e !== null && e.status === 'Approved'); setEvents(fetchedEvents); setLoading(false); }); return () => unsubscribe(); }, []);
     const handleDateClick = async (day) => { const clickedDate = new Date(displayDate.getFullYear(), displayDate.getMonth(), day); const dateStr = clickedDate.toISOString().split('T')[0]; if (adminMode) { if (blackouts.includes(dateStr)) { if(window.confirm(`Re-open ${dateStr}?`)) await deleteDoc(doc(db, "blackout_dates", dateStr)); } else { if(window.confirm(`Blackout ${dateStr}?`)) await setDoc(doc(db, "blackout_dates", dateStr), { reason: "Closed" }); } return; } setSelectedDate(selectedDate === day ? null : day); };
     const getDaysInMonth = (date) => { const year = date.getFullYear(); const month = date.getMonth(); const days = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); return { days, firstDay, monthName: date.toLocaleString('default', { month: 'long' }), year }; };
     const { days, firstDay, monthName, year } = getDaysInMonth(displayDate);
@@ -723,18 +670,7 @@ function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    useEffect(() => { 
-        const q = query(collection(db, "requests"), orderBy("createdAt", "desc")); 
-        const unsubscribe = onSnapshot(q, (snapshot) => { 
-            const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: formatDateSafe(doc.data().createdAt) })); 
-            setRequests(reqs); 
-            setLoading(false); 
-        }, (err) => {
-            console.error("Queue Error:", err);
-            setLoading(false);
-        }); 
-        return () => unsubscribe(); 
-    }, []);
+    useEffect(() => { const q = query(collection(db, "requests"), orderBy("createdAt", "desc")); const unsubscribe = onSnapshot(q, (snapshot) => { const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), formattedDate: formatDateSafe(doc.data().createdAt) })); setRequests(reqs); setLoading(false); }); return () => unsubscribe(); }, []);
     
     const handleStatusUpdate = async (req, newStatus) => { 
         if (!window.confirm(`Confirm status change to: ${newStatus}?`)) return; 
@@ -823,9 +759,7 @@ function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
                       {Object.entries(selectedRequest).map(([key, value]) => {
                         if(['id', 'dept', 'status', 'fullName', 'email', 'role', 'formattedDate', 'createdAt', 'title', 'requestName', 'displayId', 'conditionReport', 'returnedAt'].includes(key)) return null;
                         if (!value) return null;
-                        // Safe render for objects
-                        if (typeof value === 'object' && !Array.isArray(value)) return null;
-
+                        
                         return (
                             <div key={key} className="bg-slate-950/50 p-4 rounded-lg border border-slate-800/50">
                                 <label className="text-[10px] font-bold text-cyan-600 uppercase block mb-1">{key.replace(/([A-Z])/g, ' $1').trim()}</label>
@@ -902,7 +836,6 @@ function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
   function AnalyticsView() {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({ total: 0, approved: 0, pending: 0, deptCounts: {}, topEquipment: [] });
-    
     useEffect(() => {
         const q = query(collection(db, "requests"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -917,12 +850,10 @@ function RequestQueueView({ adminMode, setAdminMode, ALLOWED_ADMINS }) {
             const sortedEquipment = Object.entries(equipmentCounts).sort(([,a], [,b]) => b - a).slice(0, 5);
             setStats({ total, approved, pending, deptCounts, topEquipment: sortedEquipment });
             setLoading(false);
-        }, (err) => setLoading(false));
+        });
         return () => unsubscribe();
     }, []);
-
     const approvalRate = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
-    
     return (
         <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 p-6 shadow-2xl animate-fade-in">
             <div className="flex items-center justify-between mb-6"><div><h2 className="text-2xl font-bold text-white flex items-center gap-2"><TrendingUp className="text-emerald-400" /> Data Analytics</h2></div><div className="bg-slate-800 border border-slate-700 px-4 py-2 rounded-lg text-cyan-400 font-mono text-sm">Total Requests: <strong>{stats.total}</strong></div></div>
@@ -1304,6 +1235,8 @@ function FormContainer({ title, icon: Icon, colorClass, children, setSubmitted, 
               const randomNum = Math.floor(1000 + Math.random() * 9000); 
               const displayId = `REQ-${timestampSuffix}-${randomNum}`; 
               
+              // 1. Determine the correct recipient based on the Form Title
+              // (Ensure DEPT_HEADS is defined at the top of your file)
               const recipientEmail = (typeof DEPT_HEADS !== 'undefined' ? DEPT_HEADS[title] : null) || "erivers@salpointe.org";
 
               await addDoc(collection(db, "requests"), { 
